@@ -117,13 +117,18 @@ The app requires the following permissions:
 - Contacts
 - Microphone
 
+### Web
+- **Note**: Direct phone calling is not supported on web browsers
+- Some native features (contacts access, direct dialing) have limited functionality on web
+- For full functionality, use mobile platforms (Android/iOS)
+
 ## Dependencies
 
 Key dependencies used in this project:
 - `geolocator` - Location services
 - `permission_handler` - Runtime permissions
 - `flutter_phone_direct_caller` - Direct phone calling
-- `contacts_service` - Contact management
+- `flutter_contacts` - Contact management (replaces deprecated contacts_service)
 - `provider` - State management
 - `shake` - Shake detection for emergency trigger
 

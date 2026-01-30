@@ -18,27 +18,27 @@ class LocationService extends ChangeNotifier {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        throw Exception('Location services are disabled.');
+        throw Exception('Location services are disabled. Please enable them in your device settings.');
       }
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
-          throw Exception('Location permissions are denied');
+          throw Exception('Location permission denied. Please grant permission to use this feature.');
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
         throw Exception(
-            'Location permissions are permanently denied, we cannot request permissions.');
+            'Location permission permanently denied. Please enable it in app settings.');
       }
 
       _currentPosition = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
     } catch (e) {
-      _error = e.toString();
+      _error = e is Exception ? e.toString().replaceAll('Exception: ', '') : 'Unable to get your location. Please try again.';
     } finally {
       _isLoading = false;
       notifyListeners();

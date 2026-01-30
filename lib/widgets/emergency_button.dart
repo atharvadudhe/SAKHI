@@ -40,10 +40,7 @@ class _EmergencyButtonState extends State<EmergencyButton>
       builder: (context) => AlertDialog(
         title: const Text('Emergency SOS'),
         content: const Text(
-          'This will:\n\n'
-          '• Call emergency services (112)\n'
-          '• Send your location to emergency contacts\n'
-          '• Start recording audio\n\n'
+          'This will call emergency services immediately.\n\n'
           'Are you sure?',
         ),
         actions: [
@@ -65,14 +62,16 @@ class _EmergencyButtonState extends State<EmergencyButton>
 
     if (confirmed == true && mounted) {
       try {
-        // Call emergency number
+        // Call emergency number (112 for Europe, can be configured per region)
+        // TODO: Make this configurable based on user's location/preference
         await FlutterPhoneDirectCaller.callNumber('112');
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Error: $e'),
+              content: Text('Unable to make emergency call. Please dial manually.'),
               backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
             ),
           );
         }

@@ -162,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             const Center(child: CircularProgressIndicator())
                           else if (locationService.error != null)
                             Text(
-                              'Error: ${locationService.error}',
+                              locationService.error!,
                               style: TextStyle(
                                 color: Theme.of(context).colorScheme.error,
                               ),

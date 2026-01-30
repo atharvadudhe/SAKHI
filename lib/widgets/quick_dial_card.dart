@@ -15,12 +15,20 @@ class QuickDialCard extends StatelessWidget {
     required this.onTap,
   });
 
-  Future<void> _makeCall() async {
+  Future<void> _makeCall(BuildContext context) async {
     if (phoneNumber != null) {
       try {
         await FlutterPhoneDirectCaller.callNumber(phoneNumber!);
       } catch (e) {
-        // Handle error silently or show a message
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Unable to make call to $phoneNumber. Please dial manually.'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
       }
     }
   }
@@ -30,7 +38,7 @@ class QuickDialCard extends StatelessWidget {
     return Card(
       elevation: 2,
       child: InkWell(
-        onTap: phoneNumber != null ? _makeCall : onTap,
+        onTap: phoneNumber != null ? () => _makeCall(context) : onTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16.0),
