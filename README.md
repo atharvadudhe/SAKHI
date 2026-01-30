@@ -1,145 +1,101 @@
 # SAKHI
 
-An app made for women and their safety - built with Flutter.
+An app that is made for women and their safety.
 
-## About
+This is a [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
-SAKHI is a comprehensive women's safety application that provides:
+# Getting Started
 
-- 🚨 Emergency SOS button with one-tap calling to emergency services
-- 📍 Real-time location tracking and sharing
-- 👥 Emergency contacts management
-- 🗺️ Safe route planning
-- 📞 Quick dial to police, ambulance, and other emergency services
-- 🎤 Audio recording during emergencies
+> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
 
-## Features
+## Step 1: Start Metro
 
-### Emergency SOS
-A prominent emergency button that:
-- Calls emergency services (112/911)
-- Sends your current location to emergency contacts
-- Starts recording audio for evidence
+First, you will need to run **Metro**, the JavaScript build tool for React Native.
 
-### Location Services
-- Real-time GPS tracking
-- Location sharing with trusted contacts
-- Safe route suggestions based on well-lit, populated areas
+To start the Metro dev server, run the following command from the root of your React Native project:
 
-### Emergency Contacts
-- Add and manage trusted emergency contacts
-- Automatic alerts sent to contacts in emergency situations
+```sh
+# Using npm
+npm start
 
-### Quick Actions
-- Fast dial to police (100)
-- Fast dial to ambulance (102)
-- Access to women's helpline numbers
-
-## Getting Started
-
-### Prerequisites
-
-- Flutter SDK (3.0.0 or higher)
-- Dart SDK
-- Android Studio / Xcode (for respective platform development)
-
-### Installation
-
-1. Clone the repository:
-```bash
-git clone https://github.com/dhairyajangir/SAKHI.git
-cd SAKHI
+# OR using Yarn
+yarn start
 ```
 
-2. Install dependencies:
-```bash
-flutter pub get
-```
+## Step 2: Build and run your app
 
-3. Run the app:
-```bash
-# For development
-flutter run
-
-# For Android
-flutter run -d android
-
-# For iOS
-flutter run -d ios
-```
-
-### Building for Production
-
-#### Android
-```bash
-flutter build apk --release
-# or for app bundle
-flutter build appbundle --release
-```
-
-#### iOS
-```bash
-flutter build ios --release
-```
-
-## Project Structure
-
-```
-lib/
-├── main.dart                 # Application entry point
-├── models/                   # Data models
-├── screens/                  # UI screens
-│   ├── home_screen.dart
-│   ├── emergency_contacts_screen.dart
-│   └── safe_routes_screen.dart
-├── widgets/                  # Reusable widgets
-│   ├── emergency_button.dart
-│   └── quick_dial_card.dart
-├── services/                 # Business logic and services
-│   └── location_service.dart
-└── utils/                    # Utility functions and constants
-```
-
-## Permissions
-
-The app requires the following permissions:
+With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
 
 ### Android
-- Location (Fine and Coarse)
-- Phone (for making emergency calls)
-- Contacts (for emergency contact management)
-- Microphone (for audio recording)
-- Vibrate
+
+```sh
+# Using npm
+npm run android
+
+# OR using Yarn
+yarn android
+```
 
 ### iOS
-- Location When In Use
-- Location Always
-- Contacts
-- Microphone
 
-### Web
-- **Note**: Direct phone calling is not supported on web browsers
-- Some native features (contacts access, direct dialing) have limited functionality on web
-- For full functionality, use mobile platforms (Android/iOS)
+For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
 
-## Dependencies
+The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
 
-Key dependencies used in this project:
-- `geolocator` - Location services
-- `permission_handler` - Runtime permissions
-- `flutter_phone_direct_caller` - Direct phone calling
-- `flutter_contacts` - Contact management (replaces deprecated contacts_service)
-- `provider` - State management
-- `shake` - Shake detection for emergency trigger
+```sh
+bundle install
+```
 
-## Contributing
+Then, and every time you update your native dependencies, run:
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+```sh
+bundle exec pod install
+```
 
-## License
+For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
 
-See the [LICENSE](LICENSE) file for details.
+```sh
+# Using npm
+npm run ios
 
-## Safety Disclaimer
+# OR using Yarn
+yarn ios
+```
 
-This app is designed to assist in emergency situations but should not be relied upon as the sole means of protection. Always follow local safety guidelines and contact local emergency services when needed.
+If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+
+This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+
+## Step 3: Modify your app
+
+Now that you have successfully run the app, let's make changes!
+
+Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+
+When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+
+- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
+- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+
+## Congratulations! :tada:
+
+You've successfully run and modified your React Native App. :partying_face:
+
+### Now what?
+
+- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
+- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+
+# Troubleshooting
+
+If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+
+# Learn More
+
+To learn more about React Native, take a look at the following resources:
+
+- [React Native Website](https://reactnative.dev) - learn more about React Native.
+- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
+- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
+- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
+- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
