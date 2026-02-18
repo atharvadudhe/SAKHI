@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helper Functions ──
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    // ── Users Collection ──
+    match /users/{userId} {
+      // Anyone authenticated can read user profiles (for volunteer info)
+      allow read: if isAuthenticated();
+
+      // Users can only create/update their own profile
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+
+      // No deletion allowed
+      allow delete: if false;
+    }
+
+    // ── Sessions Collection ──
+    match /sessions/{sessionId} {
+      // Authenticated users can read sessions (needed for volunteer matching)
+      allow read: if isAuthenticated();
+
+      // Only authenticated users can create sessions
+      allow create: if isAuthenticated()
+                    && request.resource.data.createdBy == request.auth.uid;
+
+      // Session can be updated by:
+      // 1. The creator (for location updates, ending, SOS)
+      // 2. A volunteer accepting the session (when status is 'searching')
+      allow update: if isAuthenticated()
+                    && (
+                      resource.data.createdBy == request.auth.uid
+                      || (
+                        resource.data.status == 'searching'
+                        && request.resource.data.status == 'active'
+                        && request.resource.data.volunteerId == request.auth.uid
+                      )
+                      || (
+                        resource.data.volunteerId == request.auth.uid
+                      )
+                    );
+
+      allow delete: if false;
+
+      // ── Location Updates Subcollection ──
+      match /locationUpdates/{updateId} {
+        // Session participants can read location updates
+        allow read: if isAuthenticated();
+
+        // Only the session creator can write location updates
+        allow create: if isAuthenticated()
+                      && request.resource.data.uid == request.auth.uid;
+
+        allow update, delete: if false;
+      }
+    }
+
+    // ── Broadcasts Collection ──
+    match /broadcasts/{broadcastId} {
+      // Authenticated users can read broadcasts
+      allow read: if isAuthenticated();
+
+      // Authenticated users can create broadcasts
+      allow create: if isAuthenticated()
+                    && request.resource.data.uid == request.auth.uid;
+
+      // No editing or deleting broadcasts
+      allow update, delete: if false;
+    }
+  }
+}
