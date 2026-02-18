@@ -109,6 +109,8 @@ class FirestoreService {
         });
 
     // Stream for sessions where the user is the volunteer
+    // Note: excludes 'searching' status because volunteers are only assigned
+    // when the session transitions to 'active' status atomically
     final volunteerStream = _db
         .collection(AppConstants.sessionsCollection)
         .where('volunteerId', isEqualTo: uid)
@@ -129,8 +131,8 @@ class FirestoreService {
         if (creator == null && volunteer == null) return null;
         if (creator == null) return volunteer;
         if (volunteer == null) return creator;
-        // Return the more recent session, preferring creator sessions as tiebreaker
-        // (in practice, a user cannot be both creator and volunteer of different sessions simultaneously)
+        // Return the more recent session
+        // Tiebreaker: prefer creator session (defensive measure for edge cases)
         if (creator.startTime.isAfter(volunteer.startTime)) {
           return creator;
         } else if (volunteer.startTime.isAfter(creator.startTime)) {

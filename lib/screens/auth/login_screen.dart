@@ -53,6 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
             // Check if profile exists and navigate accordingly
             final hasProfile = await AuthService.instance.hasProfile();
             if (!mounted) return;
+            setState(() => _isLoading = false);
             if (hasProfile) {
               context.go('/home');
             } else {
