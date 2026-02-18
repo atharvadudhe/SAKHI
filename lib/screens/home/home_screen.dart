@@ -478,6 +478,22 @@ class _QuickActionCard extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                  color: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.color
+                          ?.withOpacity(0.8) ??
+                      Colors.black54,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
             ],
           ),
         ),

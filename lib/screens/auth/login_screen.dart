@@ -46,13 +46,23 @@ class _LoginScreenState extends State<LoginScreen> {
           _showError(error);
         },
         onAutoVerified: (credential) async {
-          // Auto-verified: sign in directly
+          // Auto-verified: sign in directly with the credential
           try {
-            await AuthService.instance.verifyOTP(
-              verificationId: '',
-              otp: '',
-            );
-          } catch (_) {}
+            await AuthService.instance.signInWithCredential(credential);
+            if (!mounted) return;
+            // Check if profile exists and navigate accordingly
+            final hasProfile = await AuthService.instance.hasProfile();
+            if (!mounted) return;
+            if (hasProfile) {
+              context.go('/home');
+            } else {
+              context.go('/profile-setup');
+            }
+          } catch (e) {
+            if (!mounted) return;
+            setState(() => _isLoading = false);
+            _showError(e.toString());
+          }
         },
       );
     } catch (e) {

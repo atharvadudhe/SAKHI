@@ -86,7 +86,7 @@ lib/
 ## Getting Started
 
 ### Prerequisites
-- Flutter SDK `^3.11.0`
+- Flutter SDK `>=3.35.0`
 - Firebase project (Spark plan is sufficient for prototype)
 - Google Maps API key
 

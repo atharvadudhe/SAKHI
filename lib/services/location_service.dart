@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -57,18 +58,36 @@ class LocationService {
   }) {
     _positionSub?.cancel();
 
-    _positionSub = Geolocator.getPositionStream(
-      locationSettings: AndroidSettings(
+    // Build platform-specific location settings
+    LocationSettings locationSettings;
+    if (Platform.isAndroid) {
+      locationSettings = AndroidSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 10, // minimum 10m movement to trigger
         intervalDuration: Duration(seconds: intervalSeconds),
         foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationText:
-              'SAKHI is monitoring your location for safety',
+          notificationText: 'SAKHI is monitoring your location for safety',
           notificationTitle: 'SAKHI Safety Active',
           enableWakeLock: true,
         ),
-      ),
+      );
+    } else if (Platform.isIOS || Platform.isMacOS) {
+      locationSettings = AppleSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+        pauseLocationUpdatesAutomatically: false,
+        showBackgroundLocationIndicator: true,
+      );
+    } else {
+      // Fallback for web and other platforms
+      locationSettings = const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+      );
+    }
+
+    _positionSub = Geolocator.getPositionStream(
+      locationSettings: locationSettings,
     ).listen(
       onUpdate,
       onError: (e) => debugPrint('Location stream error: $e'),

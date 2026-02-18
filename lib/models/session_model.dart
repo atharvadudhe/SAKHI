@@ -111,6 +111,15 @@ class SessionModel {
   bool get isSOS => status == SessionStatus.sosTriggered;
 
   Duration get elapsed => DateTime.now().difference(startTime);
-  Duration get remaining =>
-      Duration(minutes: timeLimit) - elapsed;
+
+  /// Time remaining before the session exceeds [timeLimit].
+  /// Never returns a negative duration; clamps at [Duration.zero] when expired.
+  Duration get remaining {
+    final limit = Duration(minutes: timeLimit);
+    final diff = limit - elapsed;
+    return diff.isNegative ? Duration.zero : diff;
+  }
+
+  /// Whether the session has exceeded its [timeLimit].
+  bool get isExpired => elapsed >= Duration(minutes: timeLimit);
 }

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
+import 'package:rxdart/rxdart.dart';
 
 import '../config/constants.dart';
 import '../models/user_model.dart';
@@ -94,7 +95,8 @@ class FirestoreService {
 
   /// Stream active session for a user (as creator or volunteer)
   Stream<SessionModel?> activeSessionStream(String uid) {
-    return _db
+    // Stream for sessions created by the user
+    final creatorStream = _db
         .collection(AppConstants.sessionsCollection)
         .where('createdBy', isEqualTo: uid)
         .where('status', whereIn: ['searching', 'active', 'sosTriggered'])
@@ -105,6 +107,34 @@ class FirestoreService {
           if (snap.docs.isEmpty) return null;
           return SessionModel.fromJson(snap.docs.first.data());
         });
+
+    // Stream for sessions where the user is the volunteer
+    final volunteerStream = _db
+        .collection(AppConstants.sessionsCollection)
+        .where('volunteerId', isEqualTo: uid)
+        .where('status', whereIn: ['active', 'sosTriggered'])
+        .orderBy('startTime', descending: true)
+        .limit(1)
+        .snapshots()
+        .map((snap) {
+          if (snap.docs.isEmpty) return null;
+          return SessionModel.fromJson(snap.docs.first.data());
+        });
+
+    // Merge both streams and return the most recent session
+    return Rx.combineLatest2<SessionModel?, SessionModel?, SessionModel?>(
+      creatorStream,
+      volunteerStream,
+      (creator, volunteer) {
+        if (creator == null && volunteer == null) return null;
+        if (creator == null) return volunteer;
+        if (volunteer == null) return creator;
+        // Return the more recent session
+        return creator.startTime.isAfter(volunteer.startTime)
+            ? creator
+            : volunteer;
+      },
+    );
   }
 
   /// Stream sessions searching for volunteers (for volunteer dashboard)
