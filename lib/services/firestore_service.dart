@@ -129,10 +129,16 @@ class FirestoreService {
         if (creator == null && volunteer == null) return null;
         if (creator == null) return volunteer;
         if (volunteer == null) return creator;
-        // Return the more recent session
-        return creator.startTime.isAfter(volunteer.startTime)
-            ? creator
-            : volunteer;
+        // Return the more recent session, preferring creator sessions as tiebreaker
+        // (in practice, a user cannot be both creator and volunteer of different sessions simultaneously)
+        if (creator.startTime.isAfter(volunteer.startTime)) {
+          return creator;
+        } else if (volunteer.startTime.isAfter(creator.startTime)) {
+          return volunteer;
+        } else {
+          // Same timestamp: prefer creator session
+          return creator;
+        }
       },
     );
   }
