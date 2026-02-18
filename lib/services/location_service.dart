@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -59,8 +58,15 @@ class LocationService {
     _positionSub?.cancel();
 
     // Build platform-specific location settings
+    // Use kIsWeb and defaultTargetPlatform to avoid dart:io on web
     LocationSettings locationSettings;
-    if (Platform.isAndroid) {
+    if (kIsWeb) {
+      // Web platform: use generic LocationSettings
+      locationSettings = const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+      );
+    } else if (defaultTargetPlatform == TargetPlatform.android) {
       locationSettings = AndroidSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 10, // minimum 10m movement to trigger
@@ -71,7 +77,8 @@ class LocationService {
           enableWakeLock: true,
         ),
       );
-    } else if (Platform.isIOS || Platform.isMacOS) {
+    } else if (defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS) {
       locationSettings = AppleSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 10,
@@ -79,7 +86,7 @@ class LocationService {
         showBackgroundLocationIndicator: true,
       );
     } else {
-      // Fallback for web and other platforms
+      // Fallback for other platforms (Linux, Windows, Fuchsia)
       locationSettings = const LocationSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 10,
