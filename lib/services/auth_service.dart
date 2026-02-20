@@ -51,6 +51,12 @@ class AuthService {
     return await _auth.signInWithCredential(credential);
   }
 
+  /// Sign in with credential (used for auto-verification)
+  Future<UserCredential> signInWithCredential(
+      PhoneAuthCredential credential) async {
+    return await _auth.signInWithCredential(credential);
+  }
+
   /// Check if user profile exists in Firestore
   Future<bool> hasProfile() async {
     if (currentUser == null) return false;

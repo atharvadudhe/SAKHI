@@ -53,12 +53,17 @@ service cloud.firestore {
 
       // ── Location Updates Subcollection ──
       match /locationUpdates/{updateId} {
-        // Session participants can read location updates
-        allow read: if isAuthenticated();
+        // Only session participants (creator or volunteer) can read location updates
+        allow read: if isAuthenticated()
+                    && (
+                      get(/databases/$(database)/documents/sessions/$(sessionId)).data.createdBy == request.auth.uid
+                      || get(/databases/$(database)/documents/sessions/$(sessionId)).data.volunteerId == request.auth.uid
+                    );
 
         // Only the session creator can write location updates
         allow create: if isAuthenticated()
-                      && request.resource.data.uid == request.auth.uid;
+                      && request.resource.data.uid == request.auth.uid
+                      && get(/databases/$(database)/documents/sessions/$(sessionId)).data.createdBy == request.auth.uid;
 
         allow update, delete: if false;
       }

@@ -57,18 +57,44 @@ class LocationService {
   }) {
     _positionSub?.cancel();
 
-    _positionSub = Geolocator.getPositionStream(
-      locationSettings: AndroidSettings(
+    // Build platform-specific location settings
+    // Use kIsWeb and defaultTargetPlatform to avoid dart:io on web
+    LocationSettings locationSettings;
+    if (kIsWeb) {
+      // Web platform: use generic LocationSettings
+      locationSettings = const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+      );
+    } else if (defaultTargetPlatform == TargetPlatform.android) {
+      locationSettings = AndroidSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 10, // minimum 10m movement to trigger
         intervalDuration: Duration(seconds: intervalSeconds),
         foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationText:
-              'SAKHI is monitoring your location for safety',
+          notificationText: 'SAKHI is monitoring your location for safety',
           notificationTitle: 'SAKHI Safety Active',
           enableWakeLock: true,
         ),
-      ),
+      );
+    } else if (defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS) {
+      locationSettings = AppleSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+        pauseLocationUpdatesAutomatically: false,
+        showBackgroundLocationIndicator: true,
+      );
+    } else {
+      // Fallback for other platforms (Linux, Windows, Fuchsia)
+      locationSettings = const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+      );
+    }
+
+    _positionSub = Geolocator.getPositionStream(
+      locationSettings: locationSettings,
     ).listen(
       onUpdate,
       onError: (e) => debugPrint('Location stream error: $e'),

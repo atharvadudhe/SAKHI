@@ -23,7 +23,9 @@ class NotificationService {
 
       // Get FCM token
       final token = await _messaging.getToken();
-      debugPrint('FCM Token: $token');
+      if (kDebugMode) {
+        debugPrint('FCM Token: $token');
+      }
 
       // Listen for foreground messages
       FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
