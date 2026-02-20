@@ -44,7 +44,7 @@ class VolunteerDashboardScreen extends ConsumerWidget {
                     const SizedBox(width: 6),
                     Switch(
                       value: isAvailable,
-                      activeColor: SakhiTheme.safe,
+                      activeThumbColor: SakhiTheme.safe,
                       onChanged: (val) {
                         // TODO: Toggle availability via Firestore
                       },
@@ -54,7 +54,7 @@ class VolunteerDashboardScreen extends ConsumerWidget {
               );
             },
             loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
+            error: (_, _) => const SizedBox.shrink(),
           ),
         ],
       ),
