@@ -157,7 +157,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           loading: () => const SizedBox(height: 28),
-                          error: (_, __) => Text(
+                          error: (_, _) => Text(
                             'Hi there! 👋',
                             style: Theme.of(context)
                                 .textTheme
@@ -182,7 +182,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           data: (session) =>
                               SessionStatusCard(session: session),
                           loading: () => const SessionStatusCard(),
-                          error: (_, __) => const SessionStatusCard(),
+                          error: (_, _) => const SessionStatusCard(),
                         ),
                         const SizedBox(height: 28),
 
