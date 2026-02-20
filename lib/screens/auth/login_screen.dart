@@ -16,7 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _phoneController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
-  String _countryCode = '+91';
+  final String _countryCode = '+91';
 
   @override
   void dispose() {
