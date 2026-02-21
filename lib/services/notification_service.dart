@@ -18,8 +18,7 @@ class NotificationService {
         criticalAlert: true,
       );
 
-      debugPrint(
-          'FCM permission: ${settings.authorizationStatus}');
+      debugPrint('FCM permission: ${settings.authorizationStatus}');
 
       // Get FCM token
       final token = await _messaging.getToken();
@@ -31,8 +30,7 @@ class NotificationService {
       FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
 
       // Listen for background message taps
-      FirebaseMessaging.onMessageOpenedApp
-          .listen(_handleBackgroundMessageTap);
+      FirebaseMessaging.onMessageOpenedApp.listen(_handleBackgroundMessageTap);
     } catch (e) {
       debugPrint('FCM initialization error: $e');
     }
