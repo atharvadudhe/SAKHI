@@ -21,10 +21,11 @@ class OtpScreen extends StatefulWidget {
 }
 
 class _OtpScreenState extends State<OtpScreen> {
-  final List<TextEditingController> _controllers =
-      List.generate(6, (_) => TextEditingController());
-  final List<FocusNode> _focusNodes =
-      List.generate(6, (_) => FocusNode());
+  final List<TextEditingController> _controllers = List.generate(
+    6,
+    (_) => TextEditingController(),
+  );
+  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
   bool _isLoading = false;
   int _resendSeconds = 60;
   Timer? _resendTimer;
@@ -61,8 +62,7 @@ class _OtpScreenState extends State<OtpScreen> {
     });
   }
 
-  String get _otp =>
-      _controllers.map((c) => c.text).join();
+  String get _otp => _controllers.map((c) => c.text).join();
 
   Future<void> _verifyOTP() async {
     final otp = _otp;
@@ -116,18 +116,17 @@ class _OtpScreenState extends State<OtpScreen> {
               Text(
                 'Verify Your Number',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 'We sent a 6-digit code to ${widget.phoneNumber}',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.6),
-                    ),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
+                ),
               ),
               const SizedBox(height: 40),
               // OTP Input boxes
@@ -154,9 +153,7 @@ class _OtpScreenState extends State<OtpScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                      ],
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       onChanged: (value) {
                         if (value.isNotEmpty && index < 5) {
                           _focusNodes[index + 1].requestFocus();
@@ -199,16 +196,48 @@ class _OtpScreenState extends State<OtpScreen> {
                     ? Text(
                         'Resend code in $_resendSeconds s',
                         style: TextStyle(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.5),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.5),
                         ),
                       )
                     : TextButton(
                         onPressed: () {
                           _startResendTimer();
-                          // TODO: re-trigger verifyPhoneNumber
+                          AuthService.instance.verifyPhoneNumber(
+                            phoneNumber: widget.phoneNumber,
+                            onCodeSent: (verificationId) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Code resent')),
+                              );
+                            },
+                            onError: (error) {
+                              ScaffoldMessenger.of(
+                                context,
+                              ).showSnackBar(SnackBar(content: Text(error)));
+                            },
+                            onAutoVerified: (credential) async {
+                              try {
+                                await AuthService.instance.signInWithCredential(
+                                  credential,
+                                );
+                                if (!mounted) return;
+                                final hasProfile = await AuthService.instance
+                                    .hasProfile();
+                                if (mounted) {
+                                  context.go(
+                                    hasProfile ? '/home' : '/profile-setup',
+                                  );
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(e.toString())),
+                                  );
+                                }
+                              }
+                            },
+                          );
                         },
                         child: const Text('Resend Code'),
                       ),
