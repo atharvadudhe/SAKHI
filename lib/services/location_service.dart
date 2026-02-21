@@ -95,10 +95,7 @@ class LocationService {
 
     _positionSub = Geolocator.getPositionStream(
       locationSettings: locationSettings,
-    ).listen(
-      onUpdate,
-      onError: (e) => debugPrint('Location stream error: $e'),
-    );
+    ).listen(onUpdate, onError: (e) => debugPrint('Location stream error: $e'));
   }
 
   /// Stop location updates
@@ -114,12 +111,7 @@ class LocationService {
     double endLat,
     double endLng,
   ) {
-    return Geolocator.distanceBetween(
-          startLat,
-          startLng,
-          endLat,
-          endLng,
-        ) /
+    return Geolocator.distanceBetween(startLat, startLng, endLat, endLng) /
         1000;
   }
 }
