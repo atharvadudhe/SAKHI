@@ -6,11 +6,7 @@ class SOSButton extends StatefulWidget {
   final VoidCallback onTriggered;
   final double size;
 
-  const SOSButton({
-    super.key,
-    required this.onTriggered,
-    this.size = 72,
-  });
+  const SOSButton({super.key, required this.onTriggered, this.size = 72});
 
   @override
   State<SOSButton> createState() => _SOSButtonState();
@@ -126,10 +122,7 @@ class _SOSButtonState extends State<SOSButton>
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [
-                    Colors.red.shade600,
-                    Colors.red.shade900,
-                  ],
+                  colors: [Colors.red.shade600, Colors.red.shade900],
                 ),
                 boxShadow: [
                   BoxShadow(
@@ -142,8 +135,11 @@ class _SOSButtonState extends State<SOSButton>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.warning_rounded,
-                      color: Colors.white, size: 24),
+                  const Icon(
+                    Icons.warning_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     'SOS',
