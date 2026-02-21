@@ -36,10 +36,13 @@ class _LoginScreenState extends State<LoginScreen> {
         phoneNumber: phoneNumber,
         onCodeSent: (verificationId) {
           setState(() => _isLoading = false);
-          context.push('/otp', extra: {
-            'verificationId': verificationId,
-            'phoneNumber': phoneNumber,
-          });
+          context.push(
+            '/otp',
+            extra: {
+              'verificationId': verificationId,
+              'phoneNumber': phoneNumber,
+            },
+          );
         },
         onError: (error) {
           setState(() => _isLoading = false);
@@ -128,26 +131,25 @@ class _LoginScreenState extends State<LoginScreen> {
                 Text(
                   'Welcome',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Enter your phone number to get started with your safety companion.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.6),
-                      ),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
                 ),
                 const SizedBox(height: 32),
                 // Phone number input
                 Text(
                   'Phone Number',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -155,7 +157,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     // Country code
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 16),
+                        horizontal: 12,
+                        vertical: 16,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
@@ -219,10 +223,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Text(
                       'Skip for now (Demo)',
                       style: TextStyle(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.5),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.5),
                       ),
                     ),
                   ),
