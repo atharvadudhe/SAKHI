@@ -6,6 +6,8 @@ import '../config/constants.dart';
 import '../models/user_model.dart';
 import '../models/session_model.dart';
 import '../models/location_update.dart';
+import '../models/emergency_contact.dart';
+import '../models/broadcast_model.dart';
 
 class FirestoreService {
   FirestoreService._();
@@ -23,9 +25,9 @@ class FirestoreService {
         .doc(uid)
         .snapshots()
         .map((doc) {
-      if (!doc.exists) return null;
-      return UserModel.fromJson(doc.data()!);
-    });
+          if (!doc.exists) return null;
+          return UserModel.fromJson(doc.data()!);
+        });
   }
 
   /// Get user by uid
@@ -54,12 +56,17 @@ class FirestoreService {
   }
 
   /// Toggle volunteer availability
-  Future<void> setVolunteerAvailability(
-      String uid, bool available) async {
-    await _db
-        .collection(AppConstants.usersCollection)
-        .doc(uid)
-        .update({'isAvailable': available});
+  Future<void> setVolunteerAvailability(String uid, bool available) async {
+    await _db.collection(AppConstants.usersCollection).doc(uid).update({
+      'isAvailable': available,
+    });
+  }
+
+  /// Update user profile name
+  Future<void> updateUserName(String uid, String name) async {
+    await _db.collection(AppConstants.usersCollection).doc(uid).update({
+      'name': name,
+    });
   }
 
   // ───────── Session Operations ─────────
@@ -153,9 +160,11 @@ class FirestoreService {
         .orderBy('startTime', descending: true)
         .limit(20)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => SessionModel.fromJson(doc.data()))
-            .toList());
+        .map(
+          (snap) => snap.docs
+              .map((doc) => SessionModel.fromJson(doc.data()))
+              .toList(),
+        );
   }
 
   /// Volunteer accepts a session
@@ -168,11 +177,11 @@ class FirestoreService {
         .collection(AppConstants.sessionsCollection)
         .doc(sessionId)
         .update({
-      'status': SessionStatus.active.name,
-      'volunteerId': volunteerId,
-      'volunteerName': volunteerName,
-      'lastUpdate': FieldValue.serverTimestamp(),
-    });
+          'status': SessionStatus.active.name,
+          'volunteerId': volunteerId,
+          'volunteerName': volunteerName,
+          'lastUpdate': FieldValue.serverTimestamp(),
+        });
   }
 
   /// End a session
@@ -181,10 +190,10 @@ class FirestoreService {
         .collection(AppConstants.sessionsCollection)
         .doc(sessionId)
         .update({
-      'status': SessionStatus.ended.name,
-      'endTime': FieldValue.serverTimestamp(),
-      'lastUpdate': FieldValue.serverTimestamp(),
-    });
+          'status': SessionStatus.ended.name,
+          'endTime': FieldValue.serverTimestamp(),
+          'lastUpdate': FieldValue.serverTimestamp(),
+        });
   }
 
   /// Trigger SOS on a session
@@ -193,9 +202,9 @@ class FirestoreService {
         .collection(AppConstants.sessionsCollection)
         .doc(sessionId)
         .update({
-      'status': SessionStatus.sosTriggered.name,
-      'lastUpdate': FieldValue.serverTimestamp(),
-    });
+          'status': SessionStatus.sosTriggered.name,
+          'lastUpdate': FieldValue.serverTimestamp(),
+        });
   }
 
   /// Update session heartbeat / location
@@ -203,13 +212,9 @@ class FirestoreService {
     String sessionId,
     GeoPoint location,
   ) async {
-    await _db
-        .collection(AppConstants.sessionsCollection)
-        .doc(sessionId)
-        .update({
-      'userLocation': location,
-      'lastUpdate': FieldValue.serverTimestamp(),
-    });
+    await _db.collection(AppConstants.sessionsCollection).doc(sessionId).update(
+      {'userLocation': location, 'lastUpdate': FieldValue.serverTimestamp()},
+    );
   }
 
   // ───────── Location Updates ─────────
@@ -234,8 +239,7 @@ class FirestoreService {
   }
 
   /// Stream location updates for a session
-  Stream<List<LocationUpdate>> locationUpdatesStream(
-      String sessionId) {
+  Stream<List<LocationUpdate>> locationUpdatesStream(String sessionId) {
     return _db
         .collection(AppConstants.sessionsCollection)
         .doc(sessionId)
@@ -243,9 +247,11 @@ class FirestoreService {
         .orderBy('timestamp', descending: true)
         .limit(50)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => LocationUpdate.fromJson(doc.data()))
-            .toList());
+        .map(
+          (snap) => snap.docs
+              .map((doc) => LocationUpdate.fromJson(doc.data()))
+              .toList(),
+        );
   }
 
   // ───────── Community Broadcast ─────────
@@ -256,14 +262,13 @@ class FirestoreService {
     required String message,
     required String alertType,
     required GeoPoint location,
+    String? userName,
   }) async {
     final id = _uuid.v4();
-    await _db
-        .collection(AppConstants.broadcastsCollection)
-        .doc(id)
-        .set({
+    await _db.collection(AppConstants.broadcastsCollection).doc(id).set({
       'id': id,
       'uid': uid,
+      'userName': userName,
       'message': message,
       'alertType': alertType,
       'location': location,
@@ -272,13 +277,108 @@ class FirestoreService {
     });
   }
 
-  /// Stream nearby broadcasts
-  Stream<List<Map<String, dynamic>>> broadcastsStream() {
+  /// Stream nearby broadcasts as typed models
+  Stream<List<BroadcastModel>> broadcastsStream() {
     return _db
         .collection(AppConstants.broadcastsCollection)
         .orderBy('timestamp', descending: true)
-        .limit(20)
+        .limit(30)
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((doc) => BroadcastModel.fromJson(doc.data()))
+              .toList(),
+        );
+  }
+
+  // ───────── Emergency Contacts ─────────
+
+  /// Get emergency contacts subcollection reference
+  CollectionReference<Map<String, dynamic>> _contactsRef(String uid) => _db
+      .collection(AppConstants.usersCollection)
+      .doc(uid)
+      .collection('emergencyContacts');
+
+  /// Stream all emergency contacts for a user
+  Stream<List<EmergencyContact>> emergencyContactsStream(String uid) {
+    return _contactsRef(uid)
+        .orderBy('name')
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((doc) => EmergencyContact.fromJson(doc.data()))
+              .toList(),
+        );
+  }
+
+  /// Add an emergency contact
+  Future<void> addEmergencyContact(String uid, EmergencyContact contact) async {
+    final id = contact.id.isEmpty ? _uuid.v4() : contact.id;
+    final data = contact.copyWith(id: id).toJson();
+    await _contactsRef(uid).doc(id).set(data);
+  }
+
+  /// Update an emergency contact
+  Future<void> updateEmergencyContact(
+    String uid,
+    EmergencyContact contact,
+  ) async {
+    await _contactsRef(uid).doc(contact.id).update(contact.toJson());
+  }
+
+  /// Delete an emergency contact
+  Future<void> deleteEmergencyContact(String uid, String contactId) async {
+    await _contactsRef(uid).doc(contactId).delete();
+  }
+
+  // ───────── Location Sharing ─────────
+
+  /// Create a temporary location share link
+  Future<String> createLocationShare({
+    required String uid,
+    required String userName,
+    required GeoPoint location,
+    required int durationMinutes,
+  }) async {
+    final id = _uuid.v4();
+    await _db.collection('locationShares').doc(id).set({
+      'id': id,
+      'uid': uid,
+      'userName': userName,
+      'location': location,
+      'createdAt': FieldValue.serverTimestamp(),
+      'expiresAt': Timestamp.fromDate(
+        DateTime.now().add(Duration(minutes: durationMinutes)),
+      ),
+      'durationMinutes': durationMinutes,
+      'isActive': true,
+    });
+    return id;
+  }
+
+  /// Stream user's active location shares
+  Stream<List<Map<String, dynamic>>> activeLocationSharesStream(String uid) {
+    return _db
+        .collection('locationShares')
+        .where('uid', isEqualTo: uid)
+        .where('isActive', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(5)
         .snapshots()
         .map((snap) => snap.docs.map((doc) => doc.data()).toList());
+  }
+
+  /// Stop a location share
+  Future<void> stopLocationShare(String shareId) async {
+    await _db.collection('locationShares').doc(shareId).update({
+      'isActive': false,
+    });
+  }
+
+  /// Update location on an active share
+  Future<void> updateLocationShare(String shareId, GeoPoint location) async {
+    await _db.collection('locationShares').doc(shareId).update({
+      'location': location,
+    });
   }
 }
