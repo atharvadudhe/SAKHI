@@ -7,6 +7,8 @@ import 'package:geolocator/geolocator.dart';
 
 import '../models/user_model.dart';
 import '../models/session_model.dart';
+import '../models/emergency_contact.dart';
+import '../models/broadcast_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/location_service.dart';
@@ -50,8 +52,7 @@ final activeSessionProvider = StreamProvider<SessionModel?>((ref) {
 });
 
 /// Stream of sessions searching for volunteers
-final searchingSessionsProvider =
-    StreamProvider<List<SessionModel>>((ref) {
+final searchingSessionsProvider = StreamProvider<List<SessionModel>>((ref) {
   return FirestoreService.instance.searchingSessionsStream();
 });
 
@@ -59,7 +60,8 @@ final searchingSessionsProvider =
 
 final sessionControllerProvider =
     NotifierProvider<SessionController, AsyncValue<void>>(
-        SessionController.new);
+      SessionController.new,
+    );
 
 class SessionController extends Notifier<AsyncValue<void>> {
   Timer? _heartbeatTimer;
@@ -68,21 +70,17 @@ class SessionController extends Notifier<AsyncValue<void>> {
   AsyncValue<void> build() => const AsyncData(null);
 
   /// Start a new safety session
-  Future<SessionModel?> startSession({
-    int timeLimitMinutes = 30,
-  }) async {
+  Future<SessionModel?> startSession({int timeLimitMinutes = 30}) async {
     state = const AsyncLoading();
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('Not logged in');
 
       // Get current location
-      final position =
-          await LocationService.instance.getCurrentPosition();
+      final position = await LocationService.instance.getCurrentPosition();
       GeoPoint? currentLocation;
       if (position != null) {
-        currentLocation =
-            GeoPoint(position.latitude, position.longitude);
+        currentLocation = GeoPoint(position.latitude, position.longitude);
       }
 
       // Create session in Firestore
@@ -132,8 +130,7 @@ class SessionController extends Notifier<AsyncValue<void>> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('Not logged in');
 
-      final userModel =
-          await FirestoreService.instance.getUser(user.uid);
+      final userModel = await FirestoreService.instance.getUser(user.uid);
       if (userModel == null) throw Exception('Profile not found');
 
       await FirestoreService.instance.acceptSession(
@@ -144,6 +141,18 @@ class SessionController extends Notifier<AsyncValue<void>> {
       state = const AsyncData(null);
     } catch (e, st) {
       state = AsyncError(e, st);
+    }
+  }
+
+  /// Toggle volunteer availability
+  Future<void> toggleAvailability(String uid, bool isAvailable) async {
+    try {
+      await FirestoreService.instance.setVolunteerAvailability(
+        uid,
+        isAvailable,
+      );
+    } catch (e) {
+      // Handle error
     }
   }
 
@@ -162,8 +171,7 @@ class SessionController extends Notifier<AsyncValue<void>> {
         final geoPoint = GeoPoint(pos.latitude, pos.longitude);
 
         // Update session location
-        FirestoreService.instance
-            .updateSessionLocation(sessionId, geoPoint);
+        FirestoreService.instance.updateSessionLocation(sessionId, geoPoint);
 
         // Write location update to subcollection
         FirestoreService.instance.writeLocationUpdate(
@@ -187,7 +195,22 @@ class SessionController extends Notifier<AsyncValue<void>> {
 
 // ───────── Location Provider ─────────
 
-final currentPositionProvider =
-    FutureProvider<Position?>((ref) async {
+final currentPositionProvider = FutureProvider<Position?>((ref) async {
   return await LocationService.instance.getCurrentPosition();
+});
+
+// ───────── Emergency Contacts Provider ─────────
+
+/// Stream of emergency contacts for the current user
+final emergencyContactsProvider = StreamProvider<List<EmergencyContact>>((ref) {
+  final user = ref.watch(authStateProvider).value;
+  if (user == null) return Stream.value([]);
+  return FirestoreService.instance.emergencyContactsStream(user.uid);
+});
+
+// ───────── Broadcasts Feed Provider ─────────
+
+/// Stream of community broadcast alerts
+final broadcastsFeedProvider = StreamProvider<List<BroadcastModel>>((ref) {
+  return FirestoreService.instance.broadcastsStream();
 });
