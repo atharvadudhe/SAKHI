@@ -16,8 +16,7 @@ class AnimatedGradientBackground extends StatefulWidget {
       _AnimatedGradientBackgroundState();
 }
 
-class _AnimatedGradientBackgroundState
-    extends State<AnimatedGradientBackground>
+class _AnimatedGradientBackgroundState extends State<AnimatedGradientBackground>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
@@ -38,7 +37,8 @@ class _AnimatedGradientBackgroundState
 
   @override
   Widget build(BuildContext context) {
-    final colors = widget.colors ??
+    final colors =
+        widget.colors ??
         const [
           Color(0xFF1A0A2E),
           Color(0xFF16213E),
