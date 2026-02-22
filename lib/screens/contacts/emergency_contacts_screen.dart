@@ -47,7 +47,7 @@ class _EmergencyContactsScreenState
       ),
       body: contactsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (e, _) => Center(child: Text('Could not load contacts. Pull down to retry.')),
         data: (contacts) {
           if (contacts.isEmpty) {
             return Center(
@@ -245,10 +245,11 @@ class _EmergencyContactsScreenState
                     }
                     if (ctx.mounted) Navigator.pop(ctx);
                   } catch (e) {
+                    debugPrint('Contact save error: $e');
                     if (ctx.mounted) {
-                      ScaffoldMessenger.of(
-                        ctx,
-                      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                      ScaffoldMessenger.of(ctx).showSnackBar(
+                        const SnackBar(content: Text('Could not save contact. Please try again.')),
+                      );
                     }
                   }
                 },
@@ -284,10 +285,19 @@ class _EmergencyContactsScreenState
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              await FirestoreService.instance.deleteEmergencyContact(
-                uid,
-                contact.id,
-              );
+              try {
+                await FirestoreService.instance.deleteEmergencyContact(
+                  uid,
+                  contact.id,
+                );
+              } catch (e) {
+                debugPrint('Contact delete error: $e');
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Could not delete contact. Please try again.')),
+                  );
+                }
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: SakhiTheme.danger,
