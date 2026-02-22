@@ -23,7 +23,7 @@ class NotificationsScreen extends ConsumerWidget {
       ),
       body: broadcastsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (e, _) => Center(child: Text('Could not load notifications.')),
         data: (broadcasts) {
           if (broadcasts.isEmpty) {
             return Center(
