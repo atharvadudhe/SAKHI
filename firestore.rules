@@ -97,9 +97,10 @@ service cloud.firestore {
       allow create: if isAuthenticated()
                     && request.resource.data.uid == request.auth.uid;
 
-      // Owner can update (location) or stop their share
+      // Owner can update (location) or stop their share; uid must not change
       allow update: if isAuthenticated()
-                    && resource.data.uid == request.auth.uid;
+                    && resource.data.uid == request.auth.uid
+                    && request.resource.data.uid == resource.data.uid;
 
       allow delete: if false;
     }
