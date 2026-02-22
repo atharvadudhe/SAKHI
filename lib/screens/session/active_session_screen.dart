@@ -17,8 +17,7 @@ class ActiveSessionScreen extends ConsumerStatefulWidget {
       _ActiveSessionScreenState();
 }
 
-class _ActiveSessionScreenState
-    extends ConsumerState<ActiveSessionScreen> {
+class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
   GoogleMapController? _mapController;
   Timer? _uiTimer;
 
@@ -42,12 +41,11 @@ class _ActiveSessionScreenState
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('End Session?'),
         content: const Text(
-            'Are you sure you want to end this safety session?'),
+          'Are you sure you want to end this safety session?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -78,11 +76,12 @@ class _ActiveSessionScreenState
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        icon: const Icon(
+          Icons.warning_rounded,
+          color: SakhiTheme.danger,
+          size: 48,
         ),
-        icon: const Icon(Icons.warning_rounded,
-            color: SakhiTheme.danger, size: 48),
         title: const Text('SOS Activated!'),
         content: const Text(
           'Emergency alert sent to your contacts and nearby volunteers. Help is on the way.',
@@ -104,8 +103,7 @@ class _ActiveSessionScreenState
 
     return Scaffold(
       body: sessionAsync.when(
-        loading: () => const Center(
-            child: CircularProgressIndicator()),
+        loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (session) {
           if (session == null) {
@@ -113,8 +111,11 @@ class _ActiveSessionScreenState
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.check_circle_rounded,
-                      size: 64, color: SakhiTheme.safe),
+                  Icon(
+                    Icons.check_circle_rounded,
+                    size: 64,
+                    color: SakhiTheme.safe,
+                  ),
                   const SizedBox(height: 16),
                   const Text(
                     'No active session',
@@ -197,8 +198,8 @@ class _ActiveSessionScreenState
                         session.status == SessionStatus.searching
                             ? 'Looking for a volunteer...'
                             : session.volunteerName != null
-                                ? 'Buddy: ${session.volunteerName}'
-                                : 'Monitoring active',
+                            ? 'Buddy: ${session.volunteerName}'
+                            : 'Monitoring active',
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.grey.shade600,
@@ -210,12 +211,15 @@ class _ActiveSessionScreenState
                 // Status badge
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 6),
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                        color: statusColor.withValues(alpha: 0.3)),
+                      color: statusColor.withValues(alpha: 0.3),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -224,8 +228,8 @@ class _ActiveSessionScreenState
                         session.status == SessionStatus.searching
                             ? Icons.search
                             : session.status == SessionStatus.active
-                                ? Icons.check_circle
-                                : Icons.warning,
+                            ? Icons.check_circle
+                            : Icons.warning,
                         size: 14,
                         color: statusColor,
                       ),
@@ -253,11 +257,16 @@ class _ActiveSessionScreenState
           right: 0,
           child: Container(
             padding: EdgeInsets.fromLTRB(
-                20, 20, 20, MediaQuery.of(context).padding.bottom + 16),
+              20,
+              20,
+              20,
+              MediaQuery.of(context).padding.bottom + 16,
+            ),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(24)),
+                top: Radius.circular(24),
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.08),
@@ -273,8 +282,7 @@ class _ActiveSessionScreenState
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.timer_outlined,
-                        size: 20, color: statusColor),
+                    Icon(Icons.timer_outlined, size: 20, color: statusColor),
                     const SizedBox(width: 8),
                     Text(
                       '${remainingMins}m ${remainingSecs}s remaining',
@@ -293,14 +301,12 @@ class _ActiveSessionScreenState
                   children: [
                     _InfoChip(
                       icon: Icons.access_time,
-                      label:
-                          '${session.elapsed.inMinutes}m elapsed',
+                      label: '${session.elapsed.inMinutes}m elapsed',
                     ),
                     const SizedBox(width: 12),
                     _InfoChip(
                       icon: Icons.update,
-                      label:
-                          '${session.timeLimit}m total',
+                      label: '${session.timeLimit}m total',
                     ),
                   ],
                 ),
@@ -310,8 +316,7 @@ class _ActiveSessionScreenState
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: () =>
-                            _endSession(session.sessionId),
+                        onPressed: () => _endSession(session.sessionId),
                         icon: const Icon(Icons.stop_rounded),
                         label: const Text('End Session'),
                         style: OutlinedButton.styleFrom(
@@ -325,8 +330,7 @@ class _ActiveSessionScreenState
                       width: 80,
                       child: SOSButton(
                         size: 56,
-                        onTriggered: () =>
-                            _triggerSOS(session.sessionId),
+                        onTriggered: () => _triggerSOS(session.sessionId),
                       ),
                     ),
                   ],
@@ -351,8 +355,10 @@ class _ActiveSessionScreenState
             children: [
               Icon(Icons.map_outlined, size: 48, color: Colors.grey),
               SizedBox(height: 8),
-              Text('Acquiring location...',
-                  style: TextStyle(color: Colors.grey)),
+              Text(
+                'Acquiring location...',
+                style: TextStyle(color: Colors.grey),
+              ),
             ],
           ),
         ),
@@ -372,8 +378,7 @@ class _ActiveSessionScreenState
         Marker(
           markerId: const MarkerId('user'),
           position: LatLng(loc.latitude, loc.longitude),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-              BitmapDescriptor.hueRose),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRose),
         ),
       },
     );
@@ -389,8 +394,7 @@ class _InfoChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: Colors.grey.shade100,
         borderRadius: BorderRadius.circular(20),
@@ -402,8 +406,7 @@ class _InfoChip extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             label,
-            style: TextStyle(
-                fontSize: 12, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
           ),
         ],
       ),

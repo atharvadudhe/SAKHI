@@ -20,8 +20,8 @@ class LocationUpdate {
   }
 
   Map<String, dynamic> toJson() => {
-        'uid': uid,
-        'geoPoint': geoPoint,
-        'timestamp': Timestamp.fromDate(timestamp),
-      };
+    'uid': uid,
+    'geoPoint': geoPoint,
+    'timestamp': Timestamp.fromDate(timestamp),
+  };
 }

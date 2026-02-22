@@ -27,10 +27,7 @@ class _SplashScreenState extends State<SplashScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     );
-    _fadeAnim = CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeOut,
-    );
+    _fadeAnim = CurvedAnimation(parent: _fadeController, curve: Curves.easeOut);
 
     _scaleController = AnimationController(
       vsync: this,
@@ -97,14 +94,13 @@ class _SplashScreenState extends State<SplashScreen>
                           width: 2,
                         ),
                         gradient: const RadialGradient(
-                          colors: [
-                            Color(0x33E91E63),
-                            Color(0x11E91E63),
-                          ],
+                          colors: [Color(0x33E91E63), Color(0x11E91E63)],
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFFE91E63).withValues(alpha: 0.3),
+                            color: const Color(
+                              0xFFE91E63,
+                            ).withValues(alpha: 0.3),
                             blurRadius: 40,
                             spreadRadius: 5,
                           ),

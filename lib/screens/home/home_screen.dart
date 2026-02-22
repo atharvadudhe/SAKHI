@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../config/theme.dart';
 import '../../config/constants.dart';
 import '../../models/session_model.dart';
 import '../../providers/providers.dart';
+import '../../services/firestore_service.dart';
+import '../../services/location_service.dart';
 import '../../widgets/sos_button.dart';
 import '../../widgets/session_status_card.dart';
 
@@ -21,6 +26,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   late final AnimationController _fadeController;
   late final Animation<double> _fadeAnim;
 
+  // ── Rotating Safety Tips ──
+  static const _safetyTips = [
+    'Start a safety session before travelling alone at night. A volunteer buddy can monitor your journey.',
+    'Share your live location with trusted contacts when heading to an unfamiliar area.',
+    'Save at least 3 emergency contacts so SOS alerts reach the right people instantly.',
+    'Keep your phone charged above 20% when going out — your safety tools depend on it.',
+    'Trust your instincts. If a place feels unsafe, broadcast a community alert to warn others.',
+    'Walk in well-lit, populated areas whenever possible and stay aware of your surroundings.',
+    'Use the volunteer mode to help others — safety is a community effort!',
+    'Review your emergency contacts regularly to keep numbers up to date.',
+  ];
+  int _tipIndex = 0;
+  late final Timer _tipTimer;
+
   @override
   void initState() {
     super.initState();
@@ -28,27 +47,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       vsync: this,
       duration: const Duration(milliseconds: 600),
     )..forward();
-    _fadeAnim = CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeOut,
-    );
+    _fadeAnim = CurvedAnimation(parent: _fadeController, curve: Curves.easeOut);
+
+    // Rotate safety tip every 10 seconds
+    _tipTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (mounted) {
+        setState(() => _tipIndex = (_tipIndex + 1) % _safetyTips.length);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _tipTimer.cancel();
     _fadeController.dispose();
     super.dispose();
   }
 
   Future<void> _startSession() async {
+    final uid = ref.read(authStateProvider).value?.uid;
+    if (uid == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please log in to start a session'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
     final controller = ref.read(sessionControllerProvider.notifier);
     final session = await controller.startSession();
     if (session != null && mounted) {
       context.push('/session');
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not start session. Check location permissions.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
-  void _triggerSOS() {
+  Future<void> _triggerSOS() async {
+    // 1. Trigger SOS on active session if exists
     final session = ref.read(activeSessionProvider).value;
     if (session != null) {
       ref
@@ -56,19 +101,66 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           .triggerSOS(session.sessionId);
     }
 
+    // 2. Also send an SOS broadcast to nearby volunteers
+    final uid = ref.read(authStateProvider).value?.uid;
+    bool broadcastSent = false;
+    if (uid != null) {
+      try {
+        final position = await LocationService.instance.getCurrentPosition();
+        if (position != null) {
+          final user = ref.read(currentUserProvider).value;
+          await FirestoreService.instance.sendBroadcast(
+            uid: uid,
+            message: 'SOS! Emergency help needed immediately!',
+            alertType: 'need_help',
+            location: GeoPoint(position.latitude, position.longitude),
+            userName: user?.name,
+          );
+          broadcastSent = true;
+        }
+      } catch (e) {
+        debugPrint('SOS broadcast failed: $e');
+      }
+    } else if (mounted) {
+      // Not logged in - can't send SOS
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please log in to use SOS'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+
+    if (!broadcastSent && session == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not send SOS. Check your connection.'),
+          backgroundColor: SakhiTheme.danger,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     // Show SOS confirmation
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        icon: const Icon(
+          Icons.warning_rounded,
+          color: SakhiTheme.danger,
+          size: 48,
         ),
-        icon: const Icon(Icons.warning_rounded,
-            color: SakhiTheme.danger, size: 48),
         title: const Text('SOS Activated'),
-        content: const Text(
-          'Emergency alert has been sent to your contacts and nearby volunteers.',
+        content: Text(
+          session != null
+              ? 'Emergency alert has been sent to your contacts and nearby volunteers.'
+              : 'Emergency broadcast sent to nearby volunteers.',
           textAlign: TextAlign.center,
         ),
         actions: [
@@ -98,8 +190,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   // ── App Bar ──
                   SliverAppBar(
                     floating: true,
-                    backgroundColor:
-                        Theme.of(context).scaffoldBackgroundColor,
+                    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
                     surfaceTintColor: Colors.transparent,
                     title: Row(
                       children: [
@@ -107,8 +198,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color:
-                                SakhiTheme.primary.withValues(alpha: 0.1),
+                            color: SakhiTheme.primary.withValues(alpha: 0.1),
                           ),
                           child: const Icon(
                             Icons.shield_rounded,
@@ -131,12 +221,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     actions: [
                       IconButton(
                         icon: const Icon(Icons.notifications_outlined),
-                        onPressed: () {},
+                        onPressed: () => context.push('/notifications'),
                       ),
                       IconButton(
                         icon: const Icon(Icons.person_outline_rounded),
                         onPressed: () {
-                          // TODO: Profile / Settings
+                          context.push('/profile');
                         },
                       ),
                     ],
@@ -151,17 +241,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         userAsync.when(
                           data: (user) => Text(
                             'Hi, ${user?.name ?? 'there'}! 👋',
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
+                            style: Theme.of(context).textTheme.headlineSmall
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           loading: () => const SizedBox(height: 28),
                           error: (_, _) => Text(
                             'Hi there! 👋',
-                            style: Theme.of(context)
-                                .textTheme
-                                .headlineSmall
+                            style: Theme.of(context).textTheme.headlineSmall
                                 ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -169,10 +255,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                         Text(
                           'Stay safe, we\'re always with you.',
                           style: TextStyle(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.5),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.5),
                           ),
                         ),
                         const SizedBox(height: 24),
@@ -200,10 +285,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.8),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.8),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -220,9 +304,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               title: 'Share Location',
                               subtitle: 'Time-bound sharing',
                               color: SakhiTheme.connected,
-                              onTap: () {
-                                // TODO: Location sharing
-                              },
+                              onTap: () => context.push('/location-sharing'),
                             ),
                             _QuickActionCard(
                               icon: Icons.campaign_rounded,
@@ -243,9 +325,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               title: 'Emergency\nContacts',
                               subtitle: 'Manage contacts',
                               color: SakhiTheme.danger,
-                              onTap: () {
-                                // TODO: Emergency contacts
-                              },
+                              onTap: () => context.push('/emergency-contacts'),
                             ),
                           ],
                         ),
@@ -263,22 +343,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               ],
                             ),
                             border: Border.all(
-                              color:
-                                  SakhiTheme.primary.withValues(alpha: 0.1),
+                              color: SakhiTheme.primary.withValues(alpha: 0.1),
                             ),
                           ),
                           child: Row(
                             children: [
                               Icon(
                                 Icons.lightbulb_outline_rounded,
-                                color: SakhiTheme.primary
-                                    .withValues(alpha: 0.7),
+                                color: SakhiTheme.primary.withValues(
+                                  alpha: 0.7,
+                                ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const Text(
                                       'Safety Tip',
@@ -288,14 +367,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                       ),
                                     ),
                                     const SizedBox(height: 4),
-                                    Text(
-                                      'Start a safety session before travelling alone at night. A volunteer buddy can monitor your journey.',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface
-                                            .withValues(alpha: 0.6),
+                                    AnimatedSwitcher(
+                                      duration: const Duration(
+                                        milliseconds: 500,
+                                      ),
+                                      child: Text(
+                                        _safetyTips[_tipIndex],
+                                        key: ValueKey<int>(_tipIndex),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(alpha: 0.6),
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -315,9 +400,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 bottom: 32,
                 left: 0,
                 right: 0,
-                child: Center(
-                  child: SOSButton(onTriggered: _triggerSOS),
-                ),
+                child: Center(child: SOSButton(onTriggered: _triggerSOS)),
               ),
             ],
           ),
@@ -341,8 +424,8 @@ class _PrimaryCTA extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasActiveSession = session != null &&
-        (session!.isActive || session!.isSearching);
+    final hasActiveSession =
+        session != null && (session!.isActive || session!.isSearching);
 
     return Material(
       borderRadius: BorderRadius.circular(20),
@@ -364,10 +447,7 @@ class _PrimaryCTA extends StatelessWidget {
                       SakhiTheme.connected,
                       SakhiTheme.connected.withValues(alpha: 0.8),
                     ]
-                  : [
-                      SakhiTheme.primary,
-                      SakhiTheme.primaryDark,
-                    ],
+                  : [SakhiTheme.primary, SakhiTheme.primaryDark],
             ),
           ),
           child: Row(
@@ -484,11 +564,10 @@ class _QuickActionCard extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w400,
-                  color: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.color
-                          ?.withOpacity(0.8) ??
+                  color:
+                      Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.color?.withValues(alpha: 0.8) ??
                       Colors.black54,
                 ),
                 maxLines: 2,

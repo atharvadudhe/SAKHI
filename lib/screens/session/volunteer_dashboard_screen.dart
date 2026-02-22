@@ -6,11 +6,20 @@ import '../../config/theme.dart';
 import '../../models/session_model.dart';
 import '../../providers/providers.dart';
 
-class VolunteerDashboardScreen extends ConsumerWidget {
+class VolunteerDashboardScreen extends ConsumerStatefulWidget {
   const VolunteerDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<VolunteerDashboardScreen> createState() =>
+      _VolunteerDashboardScreenState();
+}
+
+class _VolunteerDashboardScreenState
+    extends ConsumerState<VolunteerDashboardScreen> {
+  final Set<String> _dismissedIds = {};
+
+  @override
+  Widget build(BuildContext context) {
     final sessionsAsync = ref.watch(searchingSessionsProvider);
     final userAsync = ref.watch(currentUserProvider);
 
@@ -35,9 +44,7 @@ class VolunteerDashboardScreen extends ConsumerWidget {
                       isAvailable ? 'Available' : 'Offline',
                       style: TextStyle(
                         fontSize: 13,
-                        color: isAvailable
-                            ? SakhiTheme.safe
-                            : Colors.grey,
+                        color: isAvailable ? SakhiTheme.safe : Colors.grey,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -46,7 +53,11 @@ class VolunteerDashboardScreen extends ConsumerWidget {
                       value: isAvailable,
                       activeThumbColor: SakhiTheme.safe,
                       onChanged: (val) {
-                        // TODO: Toggle availability via Firestore
+                        if (user != null) {
+                          ref
+                              .read(sessionControllerProvider.notifier)
+                              .toggleAvailability(user.uid, val);
+                        }
                       },
                     ),
                   ],
@@ -60,10 +71,12 @@ class VolunteerDashboardScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         child: sessionsAsync.when(
-          loading: () =>
-              const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('Error: $e')),
-          data: (sessions) {
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => Center(child: Text('Could not load sessions.')),
+          data: (allSessions) {
+            final sessions = allSessions
+                .where((s) => !_dismissedIds.contains(s.sessionId))
+                .toList();
             if (sessions.isEmpty) {
               return Center(
                 child: Column(
@@ -99,8 +112,7 @@ class VolunteerDashboardScreen extends ConsumerWidget {
                 if (index == 0) {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16),
-                    child: _VolunteerStatsBar(
-                        requestCount: sessions.length),
+                    child: _VolunteerStatsBar(requestCount: sessions.length),
                   );
                 }
                 return Padding(
@@ -109,10 +121,20 @@ class VolunteerDashboardScreen extends ConsumerWidget {
                     session: sessions[index - 1],
                     onAccept: () {
                       ref
-                          .read(
-                              sessionControllerProvider.notifier)
-                          .acceptSession(
-                              sessions[index - 1].sessionId);
+                          .read(sessionControllerProvider.notifier)
+                          .acceptSession(sessions[index - 1].sessionId);
+                    },
+                    onDecline: () {
+                      setState(() {
+                        _dismissedIds.add(sessions[index - 1].sessionId);
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Request declined'),
+                          behavior: SnackBarBehavior.floating,
+                          duration: Duration(seconds: 1),
+                        ),
+                      );
                     },
                   ),
                 );
@@ -142,13 +164,11 @@ class _VolunteerStatsBar extends StatelessWidget {
             SakhiTheme.safe.withValues(alpha: 0.05),
           ],
         ),
-        border: Border.all(
-            color: SakhiTheme.safe.withValues(alpha: 0.2)),
+        border: Border.all(color: SakhiTheme.safe.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
-          Icon(Icons.people_rounded,
-              color: SakhiTheme.safe, size: 24),
+          Icon(Icons.people_rounded, color: SakhiTheme.safe, size: 24),
           const SizedBox(width: 12),
           Text(
             '$requestCount nearby request${requestCount == 1 ? '' : 's'}',
@@ -166,10 +186,12 @@ class _VolunteerStatsBar extends StatelessWidget {
 class _SessionRequestCard extends StatelessWidget {
   final SessionModel session;
   final VoidCallback onAccept;
+  final VoidCallback onDecline;
 
   const _SessionRequestCard({
     required this.session,
     required this.onAccept,
+    required this.onDecline,
   });
 
   @override
@@ -177,9 +199,7 @@ class _SessionRequestCard extends StatelessWidget {
     final elapsed = DateTime.now().difference(session.startTime);
 
     return Card(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -224,7 +244,9 @@ class _SessionRequestCard extends StatelessWidget {
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: SakhiTheme.searching.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
@@ -245,7 +267,7 @@ class _SessionRequestCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () {}, // Decline
+                    onPressed: onDecline,
                     style: OutlinedButton.styleFrom(
                       minimumSize: const Size(0, 44),
                       side: BorderSide(color: Colors.grey.shade300),

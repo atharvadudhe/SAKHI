@@ -82,26 +82,25 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 Text(
                   'Set Up Your Profile',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Tell us a bit about yourself to personalize your safety experience.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.6),
-                      ),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
                 ),
                 const SizedBox(height: 32),
                 // Name field
                 Text(
                   'Your Name',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -122,9 +121,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 // Role selection
                 Text(
                   'I want to',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -148,8 +147,8 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                         subtitle: 'Help others\nstay safe',
                         isSelected: _selectedRole == UserRole.volunteer,
                         color: SakhiTheme.safe,
-                        onTap: () => setState(
-                            () => _selectedRole = UserRole.volunteer),
+                        onTap: () =>
+                            setState(() => _selectedRole = UserRole.volunteer),
                       ),
                     ),
                   ],
@@ -234,10 +233,9 @@ class _RoleCard extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.6),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.6),
               ),
             ),
           ],

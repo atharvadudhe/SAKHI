@@ -4,24 +4,23 @@ import 'package:go_router/go_router.dart';
 import '../screens/splash_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/otp_screen.dart';
+import '../screens/auth/email_login_screen.dart';
 import '../screens/auth/profile_setup_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/session/active_session_screen.dart';
 import '../screens/session/volunteer_dashboard_screen.dart';
 import '../screens/broadcast/broadcast_screen.dart';
+import '../screens/profile/profile_screen.dart';
+import '../screens/contacts/emergency_contacts_screen.dart';
+import '../screens/location/location_sharing_screen.dart';
+import '../screens/notifications/notifications_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
   debugLogDiagnostics: true,
   routes: [
-    GoRoute(
-      path: '/splash',
-      builder: (context, state) => const SplashScreen(),
-    ),
-    GoRoute(
-      path: '/login',
-      builder: (context, state) => const LoginScreen(),
-    ),
+    GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
+    GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
     GoRoute(
       path: '/otp',
       builder: (context, state) {
@@ -31,6 +30,10 @@ final GoRouter appRouter = GoRouter(
           phoneNumber: extra['phoneNumber'] as String? ?? '',
         );
       },
+    ),
+    GoRoute(
+      path: '/email-login',
+      builder: (context, state) => const EmailLoginScreen(),
     ),
     GoRoute(
       path: '/profile-setup',
@@ -57,6 +60,22 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/broadcast',
       builder: (context, state) => const BroadcastScreen(),
+    ),
+    GoRoute(
+      path: '/profile',
+      builder: (context, state) => const ProfileScreen(),
+    ),
+    GoRoute(
+      path: '/emergency-contacts',
+      builder: (context, state) => const EmergencyContactsScreen(),
+    ),
+    GoRoute(
+      path: '/location-sharing',
+      builder: (context, state) => const LocationSharingScreen(),
+    ),
+    GoRoute(
+      path: '/notifications',
+      builder: (context, state) => const NotificationsScreen(),
     ),
   ],
 );

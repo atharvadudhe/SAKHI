@@ -20,18 +20,15 @@ class AuthService {
     required String phoneNumber,
     required void Function(String verificationId) onCodeSent,
     required void Function(String error) onError,
-    required void Function(PhoneAuthCredential credential)
-        onAutoVerified,
+    required void Function(PhoneAuthCredential credential) onAutoVerified,
   }) async {
     try {
       await _auth.verifyPhoneNumber(
         phoneNumber: phoneNumber,
         timeout: const Duration(seconds: 60),
         verificationCompleted: onAutoVerified,
-        verificationFailed: (e) =>
-            onError(e.message ?? 'Verification failed'),
-        codeSent: (verificationId, resendToken) =>
-            onCodeSent(verificationId),
+        verificationFailed: (e) => onError(e.message ?? 'Verification failed'),
+        codeSent: (verificationId, resendToken) => onCodeSent(verificationId),
         codeAutoRetrievalTimeout: (_) {},
       );
     } catch (e) {
@@ -53,8 +50,33 @@ class AuthService {
 
   /// Sign in with credential (used for auto-verification)
   Future<UserCredential> signInWithCredential(
-      PhoneAuthCredential credential) async {
+    PhoneAuthCredential credential,
+  ) async {
     return await _auth.signInWithCredential(credential);
+  }
+
+  // ── Email / Password Auth ──────────────────────────────────────────────
+
+  /// Register a new user with email and password
+  Future<UserCredential> registerWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    return await _auth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+  }
+
+  /// Sign in with email and password
+  Future<UserCredential> signInWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    return await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
   }
 
   /// Check if user profile exists in Firestore

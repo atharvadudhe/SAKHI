@@ -23,4 +23,5 @@ class AppConstants {
   static const String sessionsCollection = 'sessions';
   static const String locationUpdatesSubcollection = 'locationUpdates';
   static const String broadcastsCollection = 'broadcasts';
+  static const String locationSharesCollection = 'locationShares';
 }

@@ -48,19 +48,18 @@ class SessionModel {
   }
 
   Map<String, dynamic> toJson() => {
-        'sessionId': sessionId,
-        'createdBy': createdBy,
-        'status': status.name,
-        'startTime': Timestamp.fromDate(startTime),
-        'endTime':
-            endTime != null ? Timestamp.fromDate(endTime!) : null,
-        'volunteerId': volunteerId,
-        'volunteerName': volunteerName,
-        'timeLimit': timeLimit,
-        'lastUpdate': Timestamp.fromDate(lastUpdate),
-        'destinationLocation': destinationLocation,
-        'userLocation': userLocation,
-      };
+    'sessionId': sessionId,
+    'createdBy': createdBy,
+    'status': status.name,
+    'startTime': Timestamp.fromDate(startTime),
+    'endTime': endTime != null ? Timestamp.fromDate(endTime!) : null,
+    'volunteerId': volunteerId,
+    'volunteerName': volunteerName,
+    'timeLimit': timeLimit,
+    'lastUpdate': Timestamp.fromDate(lastUpdate),
+    'destinationLocation': destinationLocation,
+    'userLocation': userLocation,
+  };
 
   static SessionStatus _parseStatus(String? status) {
     switch (status) {
@@ -100,8 +99,7 @@ class SessionModel {
       volunteerName: volunteerName ?? this.volunteerName,
       timeLimit: timeLimit ?? this.timeLimit,
       lastUpdate: lastUpdate ?? this.lastUpdate,
-      destinationLocation:
-          destinationLocation ?? this.destinationLocation,
+      destinationLocation: destinationLocation ?? this.destinationLocation,
       userLocation: userLocation ?? this.userLocation,
     );
   }

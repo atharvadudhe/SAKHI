@@ -39,17 +39,17 @@ class UserModel {
   }
 
   Map<String, dynamic> toJson() => {
-        'uid': uid,
-        'name': name,
-        'phone': phone,
-        'role': role == UserRole.volunteer ? 'volunteer' : 'user',
-        'isAvailable': isAvailable,
-        'currentLocation': currentLocation,
-        'lastHeartbeat': lastHeartbeat != null
-            ? Timestamp.fromDate(lastHeartbeat!)
-            : null,
-        'verifiedStatus': verifiedStatus,
-      };
+    'uid': uid,
+    'name': name,
+    'phone': phone,
+    'role': role == UserRole.volunteer ? 'volunteer' : 'user',
+    'isAvailable': isAvailable,
+    'currentLocation': currentLocation,
+    'lastHeartbeat': lastHeartbeat != null
+        ? Timestamp.fromDate(lastHeartbeat!)
+        : null,
+    'verifiedStatus': verifiedStatus,
+  };
 
   UserModel copyWith({
     String? uid,
