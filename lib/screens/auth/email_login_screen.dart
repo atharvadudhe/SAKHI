@@ -54,8 +54,8 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
 
       context.go(hasProfile ? '/home' : '/profile-setup');
     } catch (e) {
-      setState(() => _isLoading = false);
       if (!mounted) return;
+      setState(() => _isLoading = false);
       String msg = e.toString();
       // Friendly messages for common errors
       if (msg.contains('email-already-in-use')) {
