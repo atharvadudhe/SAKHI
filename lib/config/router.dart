@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../screens/splash_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/otp_screen.dart';
+import '../screens/auth/email_login_screen.dart';
 import '../screens/auth/profile_setup_screen.dart';
 import '../screens/home/home_screen.dart';
 import '../screens/session/active_session_screen.dart';
@@ -29,6 +30,10 @@ final GoRouter appRouter = GoRouter(
           phoneNumber: extra['phoneNumber'] as String? ?? '',
         );
       },
+    ),
+    GoRoute(
+      path: '/email-login',
+      builder: (context, state) => const EmailLoginScreen(),
     ),
     GoRoute(
       path: '/profile-setup',
