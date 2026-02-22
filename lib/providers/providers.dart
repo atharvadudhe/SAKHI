@@ -151,8 +151,8 @@ class SessionController extends Notifier<AsyncValue<void>> {
         uid,
         isAvailable,
       );
-    } catch (e) {
-      // Handle error
+    } catch (e, st) {
+      state = AsyncError(e, st);
     }
   }
 
