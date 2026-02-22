@@ -55,6 +55,30 @@ class AuthService {
     return await _auth.signInWithCredential(credential);
   }
 
+  // ── Email / Password Auth ──────────────────────────────────────────────
+
+  /// Register a new user with email and password
+  Future<UserCredential> registerWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    return await _auth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+  }
+
+  /// Sign in with email and password
+  Future<UserCredential> signInWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    return await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+  }
+
   /// Check if user profile exists in Firestore
   Future<bool> hasProfile() async {
     if (currentUser == null) return false;
