@@ -6,11 +6,20 @@ import '../../config/theme.dart';
 import '../../models/session_model.dart';
 import '../../providers/providers.dart';
 
-class VolunteerDashboardScreen extends ConsumerWidget {
+class VolunteerDashboardScreen extends ConsumerStatefulWidget {
   const VolunteerDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<VolunteerDashboardScreen> createState() =>
+      _VolunteerDashboardScreenState();
+}
+
+class _VolunteerDashboardScreenState
+    extends ConsumerState<VolunteerDashboardScreen> {
+  final Set<String> _dismissedIds = {};
+
+  @override
+  Widget build(BuildContext context) {
     final sessionsAsync = ref.watch(searchingSessionsProvider);
     final userAsync = ref.watch(currentUserProvider);
 
@@ -63,8 +72,11 @@ class VolunteerDashboardScreen extends ConsumerWidget {
       body: SafeArea(
         child: sessionsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('Error: $e')),
-          data: (sessions) {
+          error: (e, _) => Center(child: Text('Could not load sessions.')),
+          data: (allSessions) {
+            final sessions = allSessions
+                .where((s) => !_dismissedIds.contains(s.sessionId))
+                .toList();
             if (sessions.isEmpty) {
               return Center(
                 child: Column(
@@ -113,7 +125,9 @@ class VolunteerDashboardScreen extends ConsumerWidget {
                           .acceptSession(sessions[index - 1].sessionId);
                     },
                     onDecline: () {
-                      // Dismiss the card visually — volunteer just ignores this request
+                      setState(() {
+                        _dismissedIds.add(sessions[index - 1].sessionId);
+                      });
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
                           content: Text('Request declined'),
