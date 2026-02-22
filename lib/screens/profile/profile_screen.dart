@@ -39,8 +39,16 @@ class ProfileScreen extends ConsumerWidget {
             onPressed: () async {
               final newName = controller.text.trim();
               if (newName.isNotEmpty) {
-                await FirestoreService.instance.updateUserName(uid, newName);
-                if (ctx.mounted) Navigator.pop(ctx);
+                try {
+                  await FirestoreService.instance.updateUserName(uid, newName);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                } catch (e) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      const SnackBar(content: Text('Could not update name. Please try again.')),
+                    );
+                  }
+                }
               }
             },
             child: const Text('Save'),
@@ -64,7 +72,7 @@ class ProfileScreen extends ConsumerWidget {
       ),
       body: userAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (e, _) => Center(child: Text('Could not load profile.')),
         data: (user) {
           if (user == null) {
             return const Center(child: Text('User not found'));
@@ -164,21 +172,48 @@ class ProfileScreen extends ConsumerWidget {
               _SettingsTile(
                 icon: Icons.security_rounded,
                 title: 'Privacy & Security',
-                onTap: () {},
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Coming soon!'),
+                      behavior: SnackBarBehavior.floating,
+                      duration: Duration(seconds: 1),
+                    ),
+                  );
+                },
               ),
               _SettingsTile(
                 icon: Icons.help_outline_rounded,
                 title: 'Help & Support',
-                onTap: () {},
+                onTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Coming soon!'),
+                      behavior: SnackBarBehavior.floating,
+                      duration: Duration(seconds: 1),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 24),
 
               // Logout Button
               ElevatedButton.icon(
                 onPressed: () async {
-                  await AuthService.instance.signOut();
-                  if (context.mounted) {
-                    context.go('/login');
+                  try {
+                    await AuthService.instance.signOut();
+                    if (context.mounted) {
+                      context.go('/login');
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Could not sign out. Please try again.'),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
                   }
                 },
                 icon: const Icon(Icons.logout_rounded),
