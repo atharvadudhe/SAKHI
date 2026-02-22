@@ -323,6 +323,9 @@ class FirestoreService {
     String uid,
     EmergencyContact contact,
   ) async {
+    if (contact.id.isEmpty) {
+      throw ArgumentError('Cannot update contact with empty id');
+    }
     await _contactsRef(uid).doc(contact.id).update(contact.toJson());
   }
 
@@ -341,7 +344,7 @@ class FirestoreService {
     required int durationMinutes,
   }) async {
     final id = _uuid.v4();
-    await _db.collection('locationShares').doc(id).set({
+    await _db.collection(AppConstants.locationSharesCollection).doc(id).set({
       'id': id,
       'uid': uid,
       'userName': userName,
@@ -359,7 +362,7 @@ class FirestoreService {
   /// Stream user's active location shares
   Stream<List<Map<String, dynamic>>> activeLocationSharesStream(String uid) {
     return _db
-        .collection('locationShares')
+        .collection(AppConstants.locationSharesCollection)
         .where('uid', isEqualTo: uid)
         .where('isActive', isEqualTo: true)
         .orderBy('createdAt', descending: true)
@@ -370,14 +373,14 @@ class FirestoreService {
 
   /// Stop a location share
   Future<void> stopLocationShare(String shareId) async {
-    await _db.collection('locationShares').doc(shareId).update({
+    await _db.collection(AppConstants.locationSharesCollection).doc(shareId).update({
       'isActive': false,
     });
   }
 
   /// Update location on an active share
   Future<void> updateLocationShare(String shareId, GeoPoint location) async {
-    await _db.collection('locationShares').doc(shareId).update({
+    await _db.collection(AppConstants.locationSharesCollection).doc(shareId).update({
       'location': location,
     });
   }
