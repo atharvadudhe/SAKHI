@@ -29,10 +29,12 @@ class _OtpScreenState extends State<OtpScreen> {
   bool _isLoading = false;
   int _resendSeconds = 60;
   Timer? _resendTimer;
+  late String _currentVerificationId;
 
   @override
   void initState() {
     super.initState();
+    _currentVerificationId = widget.verificationId;
     _startResendTimer();
   }
 
@@ -72,7 +74,7 @@ class _OtpScreenState extends State<OtpScreen> {
 
     try {
       await AuthService.instance.verifyOTP(
-        verificationId: widget.verificationId,
+        verificationId: _currentVerificationId,
         otp: otp,
       );
 
@@ -207,14 +209,22 @@ class _OtpScreenState extends State<OtpScreen> {
                           AuthService.instance.verifyPhoneNumber(
                             phoneNumber: widget.phoneNumber,
                             onCodeSent: (verificationId) {
+                              if (!mounted) return;
+                              setState(() {
+                                _currentVerificationId = verificationId;
+                              });
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('Code resent')),
                               );
                             },
                             onError: (error) {
-                              ScaffoldMessenger.of(
-                                context,
-                              ).showSnackBar(SnackBar(content: Text(error)));
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Could not resend code. Please try again.'),
+                                  backgroundColor: SakhiTheme.danger,
+                                ),
+                              );
                             },
                             onAutoVerified: (credential) async {
                               try {
@@ -224,17 +234,17 @@ class _OtpScreenState extends State<OtpScreen> {
                                 if (!mounted) return;
                                 final hasProfile = await AuthService.instance
                                     .hasProfile();
-                                if (mounted) {
-                                  context.go(
-                                    hasProfile ? '/home' : '/profile-setup',
-                                  );
-                                }
+                                if (!mounted) return;
+                                context.go(
+                                  hasProfile ? '/home' : '/profile-setup',
+                                );
                               } catch (e) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text(e.toString())),
-                                  );
-                                }
+                                if (!mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Auto-verification failed. Enter the code manually.'),
+                                  ),
+                                );
                               }
                             },
                           );
