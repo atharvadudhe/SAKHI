@@ -216,6 +216,42 @@ class _LoginScreenState extends State<LoginScreen> {
                       : const Text('Continue'),
                 ),
                 const SizedBox(height: 16),
+
+                // ── OR divider ──
+                Row(
+                  children: [
+                    Expanded(child: Divider(color: Colors.grey.shade300)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        'OR',
+                        style: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    Expanded(child: Divider(color: Colors.grey.shade300)),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // ── Email sign-in button ──
+                OutlinedButton.icon(
+                  onPressed: () => context.push('/email-login'),
+                  icon: const Icon(Icons.email_outlined),
+                  label: const Text('Sign in with Email'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: SakhiTheme.primary,
+                    side: const BorderSide(color: SakhiTheme.primary),
+                    minimumSize: const Size.fromHeight(52),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
                 // Skip for testing
                 Center(
                   child: TextButton(
