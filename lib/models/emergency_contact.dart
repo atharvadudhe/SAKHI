@@ -12,10 +12,18 @@ class EmergencyContact {
   });
 
   factory EmergencyContact.fromJson(Map<String, dynamic> json) {
+    final name = json['name'] as String?;
+    final phone = json['phone'] as String?;
+    if (name == null || name.isEmpty) {
+      throw FormatException('EmergencyContact.fromJson: missing required field "name"');
+    }
+    if (phone == null || phone.isEmpty) {
+      throw FormatException('EmergencyContact.fromJson: missing required field "phone"');
+    }
     return EmergencyContact(
       id: json['id'] as String? ?? '',
-      name: json['name'] as String? ?? '',
-      phone: json['phone'] as String? ?? '',
+      name: name,
+      phone: phone,
       relationship: json['relationship'] as String? ?? '',
     );
   }
