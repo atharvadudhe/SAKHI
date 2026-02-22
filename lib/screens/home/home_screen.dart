@@ -103,6 +103,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     // 2. Also send an SOS broadcast to nearby volunteers
     final uid = ref.read(authStateProvider).value?.uid;
+    bool broadcastSent = false;
     if (uid != null) {
       try {
         final position = await LocationService.instance.getCurrentPosition();
@@ -115,8 +116,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             location: GeoPoint(position.latitude, position.longitude),
             userName: user?.name,
           );
+          broadcastSent = true;
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('SOS broadcast failed: $e');
+      }
     } else if (mounted) {
       // Not logged in - can't send SOS
       ScaffoldMessenger.of(context).showSnackBar(
@@ -129,6 +133,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
 
     if (!mounted) return;
+
+    if (!broadcastSent && session == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not send SOS. Check your connection.'),
+          backgroundColor: SakhiTheme.danger,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
 
     // Show SOS confirmation
     showDialog(
