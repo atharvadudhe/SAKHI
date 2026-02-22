@@ -99,8 +99,8 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
       setState(() => _isSharing = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
+          const SnackBar(
+            content: Text('Could not start sharing. Check location permissions.'),
             backgroundColor: SakhiTheme.danger,
             behavior: SnackBarBehavior.floating,
           ),
@@ -340,8 +340,9 @@ class _ActiveSharingCardState extends State<_ActiveSharingCard> {
   @override
   Widget build(BuildContext context) {
     final remaining = _expiresAt.difference(DateTime.now());
-    final mins = remaining.inMinutes;
-    final secs = remaining.inSeconds % 60;
+    final totalSeconds = remaining.inSeconds.clamp(0, 999999);
+    final mins = totalSeconds ~/ 60;
+    final secs = totalSeconds % 60;
 
     return Container(
       padding: const EdgeInsets.all(24),
