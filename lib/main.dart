@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -18,15 +19,14 @@ void main() async {
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   // Initialize Firebase
+  bool firebaseReady = false;
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
-    // ── Local Emulator (free testing, no billing needed) ──────────────────
-    // Set to false when using real Firebase production
-    const bool useEmulator = true;
-    if (useEmulator) {
+    // ── Local Emulator (only in debug builds) ────────────────────────────
+    if (kDebugMode) {
       const String host = '10.0.2.2'; // Android emulator → host machine
       // const String host = 'localhost'; // Physical device / web / desktop
       await FirebaseAuth.instance.useAuthEmulator(host, 9099);
@@ -36,8 +36,26 @@ void main() async {
 
     // Initialize push notifications
     await NotificationService.instance.initialize();
-  } catch (e) {
-    debugPrint('Firebase init error: $e');
+    firebaseReady = true;
+  } catch (e, st) {
+    debugPrint('Firebase init error: $e\n$st');
+  }
+
+  if (!firebaseReady) {
+    // Show a minimal error app so users aren't left on a blank screen
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Text(
+              'Failed to initialise Firebase.\nPlease restart the app.',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      ),
+    );
+    return;
   }
 
   runApp(const ProviderScope(child: SakhiApp()));
