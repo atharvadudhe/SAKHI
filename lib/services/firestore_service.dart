@@ -384,4 +384,41 @@ class FirestoreService {
       'location': location,
     });
   }
+
+  // ───────── Admin Operations ─────────
+
+  /// Stream all registered users (admin only)
+  Stream<List<UserModel>> allUsersStream() {
+    return _db
+        .collection(AppConstants.usersCollection)
+        .orderBy('name')
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((doc) => UserModel.fromJson(doc.data()))
+              .toList(),
+        );
+  }
+
+  /// Stream all active sessions (admin only)
+  Stream<List<SessionModel>> allActiveSessionsStream() {
+    return _db
+        .collection(AppConstants.sessionsCollection)
+        .where('status', whereIn: ['searching', 'active', 'sosTriggered'])
+        .orderBy('startTime', descending: true)
+        .limit(50)
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((doc) => SessionModel.fromJson(doc.data()))
+              .toList(),
+        );
+  }
+
+  /// Update a user's role (admin only)
+  Future<void> updateUserRole(String uid, String role) async {
+    await _db.collection(AppConstants.usersCollection).doc(uid).update({
+      'role': role,
+    });
+  }
 }
