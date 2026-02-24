@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../services/auth_service.dart';
+import '../services/firestore_service.dart';
+import '../models/user_model.dart';
 import '../widgets/animated_gradient_bg.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -51,8 +54,27 @@ class _SplashScreenState extends State<SplashScreen>
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         final hasProfile = await AuthService.instance.hasProfile();
-        if (mounted) {
-          context.go(hasProfile ? '/home' : '/profile-setup');
+        if (!mounted) return;
+        if (!hasProfile) {
+          context.go('/profile-setup');
+          return;
+        }
+        // Fetch role and redirect accordingly
+        final userModel = await FirestoreService.instance.getUser(user.uid);
+        if (!mounted) return;
+        switch (userModel?.role ?? UserRole.user) {
+          case UserRole.admin:
+            if (kIsWeb) {
+              context.go('/admin');
+            } else {
+              // Admin cannot access from mobile — sign out
+              await AuthService.instance.signOut();
+              if (mounted) context.go('/login');
+            }
+          case UserRole.volunteer:
+            context.go('/volunteer');
+          case UserRole.user:
+            context.go('/home');
         }
       } else {
         if (mounted) context.go('/login');
