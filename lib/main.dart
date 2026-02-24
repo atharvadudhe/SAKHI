@@ -15,8 +15,10 @@ import 'services/notification_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Lock to portrait mode
-  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  // Lock to portrait mode (skip on web)
+  if (!kIsWeb) {
+    await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  }
 
   // Initialize Firebase
   bool firebaseReady = false;
@@ -27,8 +29,12 @@ void main() async {
 
     // ── Local Emulator (only in debug builds) ────────────────────────────
     if (kDebugMode) {
-      const String host = '10.0.2.2'; // Android emulator → host machine
-      // const String host = 'localhost'; // Physical device / web / desktop
+      // Override with: --dart-define=EMULATOR_HOST=192.168.x.x
+      // Default '10.0.2.2' works for Android emulator → host machine.
+      const String host = String.fromEnvironment(
+        'EMULATOR_HOST',
+        defaultValue: kIsWeb ? 'localhost' : '10.0.2.2',
+      );
       await FirebaseAuth.instance.useAuthEmulator(host, 9099);
       FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
     }
