@@ -1,4 +1,4 @@
-rules_version = '2';
+﻿rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -11,98 +11,91 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == uid;
     }
 
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+
+    function isVolunteer() {
+      return isAuthenticated() && getUserRole() == 'volunteer';
+    }
+
     // ── Users Collection ──
     match /users/{userId} {
-      // Anyone authenticated can read user profiles (for volunteer info)
+      // Admins can read/write all users; authenticated users can read profiles
       allow read: if isAuthenticated();
-
-      // Users can only create/update their own profile
       allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
-
-      // No deletion allowed
+      allow update: if isOwner(userId) || isAdmin();
       allow delete: if false;
 
       // ── Emergency Contacts Subcollection ──
       match /emergencyContacts/{contactId} {
-        // Only the owner can read/write their emergency contacts
         allow read, write: if isOwner(userId);
+        allow read: if isAdmin();
       }
     }
 
     // ── Sessions Collection ──
     match /sessions/{sessionId} {
-      // Authenticated users can read sessions (needed for volunteer matching)
+      // Admins have full access; authenticated users can read
       allow read: if isAuthenticated();
-
-      // Only authenticated users can create sessions
       allow create: if isAuthenticated()
                     && request.resource.data.createdBy == request.auth.uid;
-
-      // Session can be updated by:
-      // 1. The creator (for location updates, ending, SOS)
-      // 2. A volunteer accepting the session (when status is 'searching')
-      allow update: if isAuthenticated()
-                    && (
-                      resource.data.createdBy == request.auth.uid
-                      || (
-                        resource.data.status == 'searching'
-                        && request.resource.data.status == 'active'
-                        && request.resource.data.volunteerId == request.auth.uid
-                      )
-                      || (
-                        resource.data.volunteerId == request.auth.uid
+      allow update: if isAdmin()
+                    || (
+                      isAuthenticated()
+                      && (
+                        resource.data.createdBy == request.auth.uid
+                        || (
+                          resource.data.status == 'searching'
+                          && request.resource.data.status == 'active'
+                          && request.resource.data.volunteerId == request.auth.uid
+                        )
+                        || resource.data.volunteerId == request.auth.uid
                       )
                     );
-
-      allow delete: if false;
+      allow delete: if isAdmin();
 
       // ── Location Updates Subcollection ──
       match /locationUpdates/{updateId} {
-        // Only session participants (creator or volunteer) can read location updates
-        allow read: if isAuthenticated()
-                    && (
-                      get(/databases/$(database)/documents/sessions/$(sessionId)).data.createdBy == request.auth.uid
-                      || get(/databases/$(database)/documents/sessions/$(sessionId)).data.volunteerId == request.auth.uid
+        allow read: if isAdmin()
+                    || (
+                      isAuthenticated()
+                      && (
+                        get(/databases/$(database)/documents/sessions/$(sessionId)).data.createdBy == request.auth.uid
+                        || get(/databases/$(database)/documents/sessions/$(sessionId)).data.volunteerId == request.auth.uid
+                      )
                     );
-
-        // Only the session creator can write location updates
         allow create: if isAuthenticated()
                       && request.resource.data.uid == request.auth.uid
                       && get(/databases/$(database)/documents/sessions/$(sessionId)).data.createdBy == request.auth.uid;
-
-        allow update, delete: if false;
+        allow update, delete: if isAdmin();
       }
     }
 
     // ── Broadcasts Collection ──
     match /broadcasts/{broadcastId} {
-      // Authenticated users can read broadcasts
       allow read: if isAuthenticated();
-
-      // Authenticated users can create broadcasts
       allow create: if isAuthenticated()
                     && request.resource.data.uid == request.auth.uid;
-
-      // No editing or deleting broadcasts
-      allow update, delete: if false;
+      allow update, delete: if isAdmin();
     }
 
     // ── Location Shares Collection ──
     match /locationShares/{shareId} {
-      // Authenticated users can read location shares
       allow read: if isAuthenticated();
-
-      // Only owner can create a location share
       allow create: if isAuthenticated()
                     && request.resource.data.uid == request.auth.uid;
-
-      // Owner can update (location) or stop their share; uid must not change
-      allow update: if isAuthenticated()
-                    && resource.data.uid == request.auth.uid
-                    && request.resource.data.uid == resource.data.uid;
-
-      allow delete: if false;
+      allow update: if isAdmin()
+                    || (
+                      isAuthenticated()
+                      && resource.data.uid == request.auth.uid
+                      && request.resource.data.uid == resource.data.uid
+                    );
+      allow delete: if isAdmin();
     }
   }
 }
