@@ -14,6 +14,7 @@ import '../screens/profile/profile_screen.dart';
 import '../screens/contacts/emergency_contacts_screen.dart';
 import '../screens/location/location_sharing_screen.dart';
 import '../screens/notifications/notifications_screen.dart';
+import '../screens/admin/admin_dashboard_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
@@ -76,6 +77,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/notifications',
       builder: (context, state) => const NotificationsScreen(),
+    ),
+    GoRoute(
+      path: '/admin',
+      builder: (context, state) => const AdminDashboardScreen(),
     ),
   ],
 );
