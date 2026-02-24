@@ -123,7 +123,7 @@ class _VolunteerDashboardScreenState
                     const SizedBox(width: 6),
                     Switch(
                       value: isAvailable,
-                      activeColor: SakhiTheme.safe,
+                      activeThumbColor: SakhiTheme.safe,
                       onChanged: (val) {
                         if (user != null) {
                           ref
