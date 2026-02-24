@@ -42,6 +42,12 @@ final isVolunteerProvider = Provider<bool>((ref) {
   return user?.role == UserRole.volunteer;
 });
 
+/// Whether the current user is an admin
+final isAdminProvider = Provider<bool>((ref) {
+  final user = ref.watch(currentUserProvider).value;
+  return user?.role == UserRole.admin;
+});
+
 // ───────── Session Providers ─────────
 
 /// Stream of the user's active session
@@ -213,4 +219,16 @@ final emergencyContactsProvider = StreamProvider<List<EmergencyContact>>((ref) {
 /// Stream of community broadcast alerts
 final broadcastsFeedProvider = StreamProvider<List<BroadcastModel>>((ref) {
   return FirestoreService.instance.broadcastsStream();
+});
+
+// ───────── Admin Providers ─────────
+
+/// Stream of all registered users (admin)
+final allUsersProvider = StreamProvider<List<UserModel>>((ref) {
+  return FirestoreService.instance.allUsersStream();
+});
+
+/// Stream of all active sessions (admin)
+final allActiveSessionsProvider = StreamProvider<List<SessionModel>>((ref) {
+  return FirestoreService.instance.allActiveSessionsStream();
 });
