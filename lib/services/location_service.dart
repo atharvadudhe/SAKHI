@@ -3,6 +3,25 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+/// Result of a location fetch attempt with a specific failure reason.
+class LocationResult {
+  final Position? position;
+  final LocationFailure? failure;
+
+  LocationResult.success(Position this.position) : failure = null;
+  LocationResult.failed(this.failure) : position = null;
+
+  bool get isSuccess => failure == null;
+}
+
+enum LocationFailure {
+  permissionDenied,
+  permissionPermanentlyDenied,
+  serviceDisabled,
+  timeout,
+  unknown,
+}
+
 class LocationService {
   LocationService._();
   static final LocationService instance = LocationService._();
@@ -18,6 +37,12 @@ class LocationService {
     return status.isGranted;
   }
 
+  /// Check if permission is permanently denied
+  Future<bool> isPermissionPermanentlyDenied() async {
+    final status = await Permission.location.status;
+    return status.isPermanentlyDenied;
+  }
+
   /// Request background location permission (for active sessions)
   Future<bool> requestBackgroundPermission() async {
     final status = await Permission.locationAlways.request();
@@ -29,25 +54,50 @@ class LocationService {
     return await Geolocator.isLocationServiceEnabled();
   }
 
-  /// Get current position
-  Future<Position?> getCurrentPosition() async {
+  /// Get current position with a detailed failure reason.
+  Future<LocationResult> getPosition() async {
     try {
       final hasPermission = await requestPermission();
-      if (!hasPermission) return null;
+      if (!hasPermission) {
+        final permanent = await isPermissionPermanentlyDenied();
+        return LocationResult.failed(
+          permanent
+              ? LocationFailure.permissionPermanentlyDenied
+              : LocationFailure.permissionDenied,
+        );
+      }
 
       final serviceEnabled = await isServiceEnabled();
-      if (!serviceEnabled) return null;
+      if (!serviceEnabled) {
+        return LocationResult.failed(LocationFailure.serviceDisabled);
+      }
 
-      return await Geolocator.getCurrentPosition(
+      final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 10),
+          timeLimit: Duration(seconds: 30),
         ),
       );
+      return LocationResult.success(position);
+    } on TimeoutException {
+      debugPrint('Location timeout (dart:async)');
+      return LocationResult.failed(LocationFailure.timeout);
+    } on LocationServiceDisabledException {
+      debugPrint('Location service disabled (geolocator)');
+      return LocationResult.failed(LocationFailure.serviceDisabled);
+    } on PermissionDeniedException {
+      debugPrint('Permission denied (geolocator)');
+      return LocationResult.failed(LocationFailure.permissionDenied);
     } catch (e) {
       debugPrint('Error getting location: $e');
-      return null;
+      return LocationResult.failed(LocationFailure.unknown);
     }
+  }
+
+  /// Legacy helper – returns Position? (null on any failure).
+  Future<Position?> getCurrentPosition() async {
+    final result = await getPosition();
+    return result.position;
   }
 
   /// Start listening to location updates (event-based, not continuous)
