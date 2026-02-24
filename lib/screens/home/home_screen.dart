@@ -13,6 +13,7 @@ import '../../services/firestore_service.dart';
 import '../../services/location_service.dart';
 import '../../widgets/sos_button.dart';
 import '../../widgets/session_status_card.dart';
+import '../../models/broadcast_model.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -177,6 +178,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget build(BuildContext context) {
     final userAsync = ref.watch(currentUserProvider);
     final sessionAsync = ref.watch(activeSessionProvider);
+    final broadcastsAsync = ref.watch(broadcastsFeedProvider);
 
     return Scaffold(
       body: FadeTransition(
@@ -389,6 +391,69 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             ],
                           ),
                         ),
+                        const SizedBox(height: 28),
+
+                        // ── Nearby Alert Feed ──
+                        Text(
+                          'Nearby Alerts',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.8),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        broadcastsAsync.when(
+                          data: (broadcasts) {
+                            if (broadcasts.isEmpty) {
+                              return Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  color: Theme.of(context).cardTheme.color ??
+                                      Theme.of(context).colorScheme.surface,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.check_circle_outline_rounded,
+                                      color: SakhiTheme.safe,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Text(
+                                        'No active alerts nearby. Your area looks safe!',
+                                        style: TextStyle(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withValues(alpha: 0.6),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+                            // Show latest 3 alerts
+                            final recent = broadcasts.take(3).toList();
+                            return Column(
+                              children: recent
+                                  .map((b) => _AlertFeedCard(broadcast: b))
+                                  .toList(),
+                            );
+                          },
+                          loading: () => const SizedBox(
+                            height: 48,
+                            child: Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                          error: (_, _) => const SizedBox.shrink(),
+                        ),
                       ]),
                     ),
                   ),
@@ -575,6 +640,110 @@ class _QuickActionCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Alert Feed Card ──
+class _AlertFeedCard extends StatelessWidget {
+  final BroadcastModel broadcast;
+
+  const _AlertFeedCard({required this.broadcast});
+
+  Color get _alertColor {
+    switch (broadcast.alertType) {
+      case 'need_help':
+        return SakhiTheme.danger;
+      case 'suspicious_activity':
+        return SakhiTheme.searching;
+      case 'road_issue':
+        return SakhiTheme.connected;
+      default:
+        return SakhiTheme.searching;
+    }
+  }
+
+  IconData get _alertIcon {
+    switch (broadcast.alertType) {
+      case 'need_help':
+        return Icons.warning_rounded;
+      case 'suspicious_activity':
+        return Icons.visibility_rounded;
+      case 'road_issue':
+        return Icons.report_rounded;
+      default:
+        return Icons.campaign_rounded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: Theme.of(context).cardTheme.color ??
+              Theme.of(context).colorScheme.surface,
+          border: Border.all(
+            color: _alertColor.withValues(alpha: 0.2),
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _alertColor.withValues(alpha: 0.1),
+              ),
+              child: Icon(_alertIcon, color: _alertColor, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    broadcast.alertLabel,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      color: _alertColor,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    broadcast.message,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              broadcast.timeAgo,
+              style: TextStyle(
+                fontSize: 11,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.4),
+              ),
+            ),
+          ],
         ),
       ),
     );

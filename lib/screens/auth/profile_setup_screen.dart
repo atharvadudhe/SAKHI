@@ -35,7 +35,15 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         role: _selectedRole,
       );
 
-      if (mounted) context.go('/home');
+      if (mounted) {
+        switch (_selectedRole) {
+          case UserRole.volunteer:
+            context.go('/volunteer');
+          case UserRole.admin:
+          case UserRole.user:
+            context.go('/home');
+        }
+      }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {

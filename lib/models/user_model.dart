@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-enum UserRole { user, volunteer }
+enum UserRole { user, volunteer, admin }
 
 class UserModel {
   final String uid;
@@ -28,7 +28,7 @@ class UserModel {
       uid: json['uid'] as String,
       name: json['name'] as String,
       phone: json['phone'] as String? ?? '',
-      role: json['role'] == 'volunteer' ? UserRole.volunteer : UserRole.user,
+      role: _parseRole(json['role'] as String?),
       isAvailable: json['isAvailable'] as bool? ?? false,
       currentLocation: json['currentLocation'] as GeoPoint?,
       lastHeartbeat: json['lastHeartbeat'] != null
@@ -42,7 +42,7 @@ class UserModel {
     'uid': uid,
     'name': name,
     'phone': phone,
-    'role': role == UserRole.volunteer ? 'volunteer' : 'user',
+    'role': role.name,
     'isAvailable': isAvailable,
     'currentLocation': currentLocation,
     'lastHeartbeat': lastHeartbeat != null
@@ -50,6 +50,17 @@ class UserModel {
         : null,
     'verifiedStatus': verifiedStatus,
   };
+
+  static UserRole _parseRole(String? value) {
+    switch (value) {
+      case 'volunteer':
+        return UserRole.volunteer;
+      case 'admin':
+        return UserRole.admin;
+      default:
+        return UserRole.user;
+    }
+  }
 
   UserModel copyWith({
     String? uid,

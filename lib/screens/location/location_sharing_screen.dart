@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../config/theme.dart';
 import '../../providers/providers.dart';
@@ -40,10 +41,32 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
     setState(() => _isSharing = true);
 
     try {
-      final position = await LocationService.instance.getCurrentPosition();
-      if (position == null) {
-        throw Exception('Could not get your location');
+      final result = await LocationService.instance.getPosition();
+      if (!mounted) return;
+
+      if (!result.isSuccess) {
+        setState(() => _isSharing = false);
+
+        switch (result.failure!) {
+          case LocationFailure.permissionDenied:
+            _showError('Location permission denied. Please grant permission and try again.');
+            return;
+          case LocationFailure.permissionPermanentlyDenied:
+            _showOpenSettingsDialog();
+            return;
+          case LocationFailure.serviceDisabled:
+            _showError('Location services (GPS) are turned off. Please enable GPS and try again.');
+            return;
+          case LocationFailure.timeout:
+            _showError('Could not get a GPS fix. Make sure you are outdoors or near a window, then try again.');
+            return;
+          case LocationFailure.unknown:
+            _showError('An unexpected location error occurred. Please try again.');
+            return;
+        }
       }
+
+      final position = result.position!;
 
       final uid = ref.read(authStateProvider).value?.uid;
       if (uid == null) throw Exception('Not logged in');
@@ -57,6 +80,7 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
         location: GeoPoint(position.latitude, position.longitude),
         durationMinutes: _selectedDuration,
       );
+      if (!mounted) return;
 
       setState(() {
         _activeShareId = shareId;
@@ -96,17 +120,50 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
         );
       }
     } catch (e) {
-      setState(() => _isSharing = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not start sharing. Check location permissions.'),
-            backgroundColor: SakhiTheme.danger,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        setState(() => _isSharing = false);
+        _showError('Could not start sharing: $e');
       }
     }
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: SakhiTheme.danger,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 5),
+      ),
+    );
+  }
+
+  void _showOpenSettingsDialog() {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Permission Required'),
+        content: const Text(
+          'Location permission is permanently denied. '
+          'Please open app settings and enable location access.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              openAppSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _stopSharing() async {

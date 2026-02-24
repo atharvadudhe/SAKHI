@@ -15,12 +15,7 @@ import 'package:flutter/foundation.dart'
 
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
-    if (kIsWeb) {
-      throw UnsupportedError(
-        'Web FirebaseOptions have not been configured. '
-        'Add your web app in Firebase Console and update this file.',
-      );
-    }
+    if (kIsWeb) return web;
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         return android;
@@ -36,11 +31,33 @@ class DefaultFirebaseOptions {
     }
   }
 
-  static const FirebaseOptions android = FirebaseOptions(
-    apiKey: String.fromEnvironment('FIREBASE_API_KEY'),
-    appId: String.fromEnvironment('FIREBASE_APP_ID'),
-    messagingSenderId: String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID'),
-    projectId: String.fromEnvironment('FIREBASE_PROJECT_ID'),
-    storageBucket: String.fromEnvironment('FIREBASE_STORAGE_BUCKET'),
+  static final FirebaseOptions web = FirebaseOptions(
+    apiKey: const String.fromEnvironment('FIREBASE_API_KEY',
+        defaultValue: 'AIzaSyDQ5E-P4eCkC2YRR7W1M4bMRYcLuecVMgE'),
+    appId: const String.fromEnvironment('FIREBASE_WEB_APP_ID',
+        defaultValue: '1:809644915762:android:0faafd6ea6fba055c2902b'),
+    messagingSenderId: const String.fromEnvironment(
+        'FIREBASE_MESSAGING_SENDER_ID',
+        defaultValue: '809644915762'),
+    projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID',
+        defaultValue: 'sakhi-dc3e3'),
+    storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET',
+        defaultValue: 'sakhi-dc3e3.firebasestorage.app'),
+    authDomain: const String.fromEnvironment('FIREBASE_AUTH_DOMAIN',
+        defaultValue: 'sakhi-dc3e3.firebaseapp.com'),
+  );
+
+  static final FirebaseOptions android = FirebaseOptions(
+    apiKey: const String.fromEnvironment('FIREBASE_API_KEY',
+        defaultValue: 'AIzaSyDQ5E-P4eCkC2YRR7W1M4bMRYcLuecVMgE'),
+    appId: const String.fromEnvironment('FIREBASE_APP_ID',
+        defaultValue: '1:809644915762:android:0faafd6ea6fba055c2902b'),
+    messagingSenderId: const String.fromEnvironment(
+        'FIREBASE_MESSAGING_SENDER_ID',
+        defaultValue: '809644915762'),
+    projectId: const String.fromEnvironment('FIREBASE_PROJECT_ID',
+        defaultValue: 'sakhi-dc3e3'),
+    storageBucket: const String.fromEnvironment('FIREBASE_STORAGE_BUCKET',
+        defaultValue: 'sakhi-dc3e3.firebasestorage.app'),
   );
 }
