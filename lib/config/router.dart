@@ -15,6 +15,11 @@ import '../screens/contacts/emergency_contacts_screen.dart';
 import '../screens/location/location_sharing_screen.dart';
 import '../screens/notifications/notifications_screen.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
+import '../screens/safety_tools/fake_call_screen.dart';
+import '../screens/safety_tools/virtual_companion_setup.dart';
+import '../screens/safety_tools/active_companion_screen.dart';
+import '../screens/safety_tools/pin_setup_screen.dart';
+import '../screens/profile/volunteer_verification_screen.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
@@ -81,6 +86,38 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/admin',
       builder: (context, state) => const AdminDashboardScreen(),
+    ),
+    GoRoute(
+      path: '/fake-call',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        return FakeCallScreen(
+          callerName: extra['callerName'] as String? ?? 'Mom',
+          callerLabel: extra['callerLabel'] as String? ?? 'Mobile',
+        );
+      },
+    ),
+    GoRoute(
+      path: '/virtual-companion-setup',
+      builder: (context, state) => const VirtualCompanionSetupScreen(),
+    ),
+    GoRoute(
+      path: '/active-companion',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        return ActiveCompanionScreen(
+          destination: extra['destination'] as String? ?? 'Unknown',
+          durationMinutes: extra['durationMinutes'] as int? ?? 30,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/pin-setup',
+      builder: (context, state) => const PinSetupScreen(),
+    ),
+    GoRoute(
+      path: '/volunteer-verification',
+      builder: (context, state) => const VolunteerVerificationScreen(),
     ),
   ],
 );

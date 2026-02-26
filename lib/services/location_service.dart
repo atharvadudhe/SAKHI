@@ -1,7 +1,12 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
+
+import '../config/constants.dart';
+import '../models/live_location_model.dart';
+import 'firestore_service.dart';
 
 /// Result of a location fetch attempt with a specific failure reason.
 class LocationResult {
@@ -152,6 +157,144 @@ class LocationService {
   void stopLocationUpdates() {
     _positionSub?.cancel();
     _positionSub = null;
+  }
+
+  // ───────── Live Tracking (writes to liveLocations collection) ─────────
+
+  StreamSubscription<Position>? _liveTrackingSub;
+  DateTime? _lastLiveWriteTime;
+  bool _isLiveTracking = false;
+
+  /// Whether live tracking is currently active.
+  bool get isLiveTracking => _isLiveTracking;
+
+  /// Start real-time location tracking for the given user.
+  ///
+  /// Streams position updates with a distance filter of 15 m and a
+  /// time-based throttle of 10 s to minimise Firestore write costs.
+  ///
+  /// [userId]  – Firebase Auth UID.
+  /// [userName] – Display name for the admin map marker.
+  /// [role]    – 'user', 'volunteer', or 'admin'.
+  /// [reason]  – Why this user is being tracked.
+  /// [sessionId] – Optional associated session ID.
+  void startLiveTracking({
+    required String userId,
+    required String userName,
+    required String role,
+    TrackingReason reason = TrackingReason.session,
+    String? sessionId,
+  }) {
+    // Prevent duplicate subscriptions
+    if (_isLiveTracking) stopLiveTracking();
+    _isLiveTracking = true;
+    _lastLiveWriteTime = null;
+
+    final distFilter = AppConstants.liveTrackingDistanceFilterM;
+    final intervalSec = AppConstants.liveTrackingIntervalSec;
+
+    LocationSettings locationSettings;
+    if (kIsWeb) {
+      locationSettings = LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: distFilter,
+      );
+    } else if (defaultTargetPlatform == TargetPlatform.android) {
+      locationSettings = AndroidSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: distFilter,
+        intervalDuration: Duration(seconds: intervalSec),
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationText: 'SAKHI is sharing your live location',
+          notificationTitle: 'SAKHI Live Tracking',
+          enableWakeLock: true,
+        ),
+      );
+    } else if (defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS) {
+      locationSettings = AppleSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: distFilter,
+        pauseLocationUpdatesAutomatically: false,
+        showBackgroundLocationIndicator: true,
+      );
+    } else {
+      locationSettings = LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: distFilter,
+      );
+    }
+
+    _liveTrackingSub = Geolocator.getPositionStream(
+      locationSettings: locationSettings,
+    ).listen(
+      (Position pos) {
+        // Time-based throttle: skip writes if <10 s since last one
+        final now = DateTime.now();
+        if (_lastLiveWriteTime != null &&
+            now.difference(_lastLiveWriteTime!).inSeconds < intervalSec) {
+          return;
+        }
+        _lastLiveWriteTime = now;
+
+        final loc = LiveLocationModel(
+          uid: userId,
+          userName: userName,
+          role: role,
+          latitude: pos.latitude,
+          longitude: pos.longitude,
+          lastUpdatedAt: now,
+          isActive: true,
+          trackingReason: reason,
+          sessionId: sessionId,
+        );
+
+        FirestoreService.instance.upsertLiveLocation(loc);
+
+        // Also keep the user document in sync (existing behaviour)
+        FirestoreService.instance.updateUserLocation(
+          userId,
+          GeoPoint(pos.latitude, pos.longitude),
+        );
+      },
+      onError: (e) => debugPrint('Live tracking stream error: $e'),
+    );
+
+    debugPrint(
+      '[LocationService] Live tracking started for $userId ($role, $reason)',
+    );
+  }
+
+  /// Stop live tracking and mark the user as inactive in Firestore.
+  void stopLiveTracking({String? userId}) {
+    _liveTrackingSub?.cancel();
+    _liveTrackingSub = null;
+    _isLiveTracking = false;
+    _lastLiveWriteTime = null;
+
+    if (userId != null) {
+      FirestoreService.instance.deactivateLiveLocation(userId);
+    }
+
+    debugPrint('[LocationService] Live tracking stopped');
+  }
+
+  /// Upgrade an existing live-tracking session to SOS priority.
+  void upgradeLiveTrackingToSOS({
+    required String userId,
+    required String userName,
+    required String role,
+    String? sessionId,
+  }) {
+    // Restart with SOS reason so the admin map picks up the change
+    stopLiveTracking();
+    startLiveTracking(
+      userId: userId,
+      userName: userName,
+      role: role,
+      reason: TrackingReason.sos,
+      sessionId: sessionId,
+    );
   }
 
   /// Calculate distance between two points in km

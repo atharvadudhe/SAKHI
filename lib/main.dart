@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'config/theme.dart';
@@ -11,6 +9,7 @@ import 'config/router.dart';
 import 'config/constants.dart';
 import 'firebase_options.dart';
 import 'services/notification_service.dart';
+import 'services/hardware_trigger_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,20 +27,27 @@ void main() async {
     );
 
     // ── Local Emulator (only in debug builds) ────────────────────────────
-    if (kDebugMode) {
-      // Override with: --dart-define=EMULATOR_HOST=192.168.x.x
-      // Default '10.0.2.2' works for Android emulator → host machine.
-      const String host = String.fromEnvironment(
-        'EMULATOR_HOST',
-        defaultValue: kIsWeb ? 'localhost' : '10.0.2.2',
-      );
-      await FirebaseAuth.instance.useAuthEmulator(host, 9099);
-      FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
-    }
+    // To use emulators, uncomment the block below and run:
+    //   firebase emulators:start
+    // For physical devices, pass your LAN IP:
+    //   flutter run --dart-define=EMULATOR_HOST=192.168.x.x
+    //
+    // if (kDebugMode) {
+    //   const String host = String.fromEnvironment(
+    //     'EMULATOR_HOST',
+    //     defaultValue: kIsWeb ? 'localhost' : '10.0.2.2',
+    //   );
+    //   await FirebaseAuth.instance.useAuthEmulator(host, 9099);
+    //   FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
+    // }
     // ─────────────────────────────────────────────────────────────────────
 
     // Initialize push notifications
     await NotificationService.instance.initialize();
+
+    // Initialize hardware-button SOS listener (volume-button trigger)
+    HardwareTriggerService.instance.initialize();
+
     firebaseReady = true;
   } catch (e, st) {
     debugPrint('Firebase init error: $e\n$st');

@@ -9,6 +9,7 @@ class BroadcastModel {
   final GeoPoint location;
   final DateTime? timestamp;
   final double radiusKm;
+  final bool isDuressActive;
 
   const BroadcastModel({
     required this.id,
@@ -19,6 +20,7 @@ class BroadcastModel {
     required this.location,
     this.timestamp,
     this.radiusKm = 2.0,
+    this.isDuressActive = false,
   });
 
   factory BroadcastModel.fromJson(Map<String, dynamic> json) {
@@ -39,6 +41,7 @@ class BroadcastModel {
       location: json['location'] as GeoPoint? ?? const GeoPoint(0, 0),
       timestamp: parsedTimestamp,
       radiusKm: (json['radiusKm'] as num?)?.toDouble() ?? 2.0,
+      isDuressActive: json['isDuressActive'] as bool? ?? false,
     );
   }
 
@@ -52,6 +55,7 @@ class BroadcastModel {
     'location': location,
     'timestamp': timestamp != null ? Timestamp.fromDate(timestamp!) : null,
     'radiusKm': radiusKm,
+    'isDuressActive': isDuressActive,
   };
 
   /// Firestore-specific map — uses server timestamp when none is set.
@@ -66,6 +70,7 @@ class BroadcastModel {
         ? Timestamp.fromDate(timestamp!)
         : FieldValue.serverTimestamp(),
     'radiusKm': radiusKm,
+    'isDuressActive': isDuressActive,
   };
 
   String get alertLabel {

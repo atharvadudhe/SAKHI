@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -9,9 +10,11 @@ import '../models/user_model.dart';
 import '../models/session_model.dart';
 import '../models/emergency_contact.dart';
 import '../models/broadcast_model.dart';
+import '../models/live_location_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/location_service.dart';
+import '../services/evidence_service.dart';
 import '../config/constants.dart';
 
 // ───────── Auth Providers ─────────
@@ -111,6 +114,11 @@ class SessionController extends Notifier<AsyncValue<void>> {
   Future<void> endSession(String sessionId) async {
     state = const AsyncLoading();
     try {
+      // Stop and upload evidence if recording was active.
+      if (EvidenceService.instance.isRecording) {
+        // Fire-and-forget — don't block session end.
+        EvidenceService.instance.stopAndUploadEvidence(sessionId);
+      }
       await FirestoreService.instance.endSession(sessionId);
       _stopTracking();
       state = const AsyncData(null);
@@ -123,6 +131,8 @@ class SessionController extends Notifier<AsyncValue<void>> {
   Future<void> triggerSOS(String sessionId) async {
     try {
       await FirestoreService.instance.triggerSOS(sessionId);
+      // Start covert evidence recording (non-blocking, best-effort).
+      EvidenceService.instance.startCovertRecording(sessionId);
     } catch (e) {
       // SOS should never silently fail
       rethrow;
@@ -170,7 +180,7 @@ class SessionController extends Notifier<AsyncValue<void>> {
       (_) => FirestoreService.instance.updateHeartbeat(uid),
     );
 
-    // Location updates
+    // Session-specific location updates
     LocationService.instance.startLocationUpdates(
       intervalSeconds: AppConstants.locationUpdateIntervalSec,
       onUpdate: (Position pos) {
@@ -190,12 +200,42 @@ class SessionController extends Notifier<AsyncValue<void>> {
         FirestoreService.instance.updateUserLocation(uid, geoPoint);
       },
     );
+
+    // Start live tracking (writes to liveLocations collection for admin map)
+    _startLiveTrackingForUser(uid, sessionId);
+  }
+
+  /// Resolve user details and activate live tracking.
+  Future<void> _startLiveTrackingForUser(
+    String uid,
+    String sessionId,
+  ) async {
+    try {
+      final userModel = await FirestoreService.instance.getUser(uid);
+      final name = userModel?.name ?? 'Unknown';
+      final role = userModel?.role.name ?? 'user';
+
+      LocationService.instance.startLiveTracking(
+        userId: uid,
+        userName: name,
+        role: role,
+        reason: TrackingReason.session,
+        sessionId: sessionId,
+      );
+    } catch (e) {
+      // Non-fatal — session tracking still runs via startLocationUpdates
+      debugPrint('Could not start live tracking: $e');
+    }
   }
 
   void _stopTracking() {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
     LocationService.instance.stopLocationUpdates();
+
+    // Also stop live tracking
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    LocationService.instance.stopLiveTracking(userId: uid);
   }
 }
 
@@ -231,4 +271,12 @@ final allUsersProvider = StreamProvider<List<UserModel>>((ref) {
 /// Stream of all active sessions (admin)
 final allActiveSessionsProvider = StreamProvider<List<SessionModel>>((ref) {
   return FirestoreService.instance.allActiveSessionsStream();
+});
+
+// ───────── Live Location Providers ─────────
+
+/// Stream of all actively-tracked live locations (admin map).
+final activeLiveLocationsProvider =
+    StreamProvider<List<LiveLocationModel>>((ref) {
+  return FirestoreService.instance.activeLiveLocationsStream();
 });

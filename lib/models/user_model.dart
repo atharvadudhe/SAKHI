@@ -2,6 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum UserRole { user, volunteer, admin }
 
+/// KYC verification status for volunteers.
+enum VerificationStatus { unverified, pending, verified, rejected }
+
 class UserModel {
   final String uid;
   final String name;
@@ -12,6 +15,13 @@ class UserModel {
   final DateTime? lastHeartbeat;
   final bool verifiedStatus;
 
+  // ── Duress PIN fields ──
+  final String? safePin;
+  final String? duressPin;
+
+  // ── KYC verification ──
+  final VerificationStatus verificationStatus;
+
   const UserModel({
     required this.uid,
     required this.name,
@@ -21,6 +31,9 @@ class UserModel {
     this.currentLocation,
     this.lastHeartbeat,
     this.verifiedStatus = false,
+    this.safePin,
+    this.duressPin,
+    this.verificationStatus = VerificationStatus.unverified,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -35,6 +48,11 @@ class UserModel {
           ? (json['lastHeartbeat'] as Timestamp).toDate()
           : null,
       verifiedStatus: json['verifiedStatus'] as bool? ?? false,
+      safePin: json['safePin'] as String?,
+      duressPin: json['duressPin'] as String?,
+      verificationStatus: _parseVerificationStatus(
+        json['verificationStatus'] as String?,
+      ),
     );
   }
 
@@ -49,6 +67,9 @@ class UserModel {
         ? Timestamp.fromDate(lastHeartbeat!)
         : null,
     'verifiedStatus': verifiedStatus,
+    'safePin': safePin,
+    'duressPin': duressPin,
+    'verificationStatus': verificationStatus.name,
   };
 
   static UserRole _parseRole(String? value) {
@@ -62,6 +83,19 @@ class UserModel {
     }
   }
 
+  static VerificationStatus _parseVerificationStatus(String? value) {
+    switch (value) {
+      case 'pending':
+        return VerificationStatus.pending;
+      case 'verified':
+        return VerificationStatus.verified;
+      case 'rejected':
+        return VerificationStatus.rejected;
+      default:
+        return VerificationStatus.unverified;
+    }
+  }
+
   UserModel copyWith({
     String? uid,
     String? name,
@@ -71,6 +105,9 @@ class UserModel {
     GeoPoint? currentLocation,
     DateTime? lastHeartbeat,
     bool? verifiedStatus,
+    String? safePin,
+    String? duressPin,
+    VerificationStatus? verificationStatus,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -81,6 +118,16 @@ class UserModel {
       currentLocation: currentLocation ?? this.currentLocation,
       lastHeartbeat: lastHeartbeat ?? this.lastHeartbeat,
       verifiedStatus: verifiedStatus ?? this.verifiedStatus,
+      safePin: safePin ?? this.safePin,
+      duressPin: duressPin ?? this.duressPin,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
     );
   }
+
+  /// Whether the user has configured both PINs for duress cancellation.
+  bool get hasDuressPinSetup =>
+      safePin != null &&
+      safePin!.length == 4 &&
+      duressPin != null &&
+      duressPin!.length == 4;
 }

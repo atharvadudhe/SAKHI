@@ -7,6 +7,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../config/theme.dart';
 import '../../models/session_model.dart';
+import '../../models/user_model.dart';
 import '../../providers/providers.dart';
 import '../../services/location_service.dart';
 
@@ -90,7 +91,6 @@ class _VolunteerDashboardScreenState
 
   @override
   Widget build(BuildContext context) {
-    final sessionsAsync = ref.watch(searchingSessionsProvider);
     final userAsync = ref.watch(currentUserProvider);
     final theme = Theme.of(context);
 
@@ -142,7 +142,101 @@ class _VolunteerDashboardScreenState
         ],
       ),
       body: SafeArea(
-        child: sessionsAsync.when(
+        child: userAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (_, _) => const SizedBox.shrink(),
+          data: (user) {
+            // ── KYC gate: block unverified volunteers ──
+            if (user != null &&
+                user.verificationStatus != VerificationStatus.verified) {
+              return _buildKycLockedView(theme, user.verificationStatus);
+            }
+            return _buildDashboardContent(theme);
+          },
+        ),
+      ),
+    );
+  }
+
+  /// Locked screen shown when the volunteer has not completed KYC.
+  Widget _buildKycLockedView(
+    ThemeData theme,
+    VerificationStatus status,
+  ) {
+    String title;
+    String message;
+    IconData icon;
+    Color color;
+
+    switch (status) {
+      case VerificationStatus.pending:
+        title = 'Verification Pending';
+        message =
+            'Your documents are being reviewed. You will be able to '
+            'view active SOS requests once verified.';
+        icon = Icons.hourglass_top_rounded;
+        color = SakhiTheme.searching;
+      case VerificationStatus.rejected:
+        title = 'Verification Rejected';
+        message =
+            'Your KYC submission was rejected. Please re-submit '
+            'valid documents to access the volunteer dashboard.';
+        icon = Icons.block_rounded;
+        color = SakhiTheme.danger;
+      case VerificationStatus.unverified:
+      case VerificationStatus.verified:
+        title = 'Verification Required';
+        message =
+            'For the safety of our users, volunteers must complete '
+            'identity verification before viewing exact locations.';
+        icon = Icons.verified_user_rounded;
+        color = SakhiTheme.primary;
+    }
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 72, color: color),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
+              ),
+            ),
+            const SizedBox(height: 24),
+            if (status != VerificationStatus.pending)
+              ElevatedButton.icon(
+                onPressed: () => context.push('/volunteer-verification'),
+                icon: const Icon(Icons.upload_rounded, size: 18),
+                label: const Text('Complete Verification'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: SakhiTheme.primary,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDashboardContent(ThemeData theme) {
+    final sessionsAsync = ref.watch(searchingSessionsProvider);
+
+    return sessionsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(
             child: Text(
@@ -279,9 +373,7 @@ class _VolunteerDashboardScreenState
               ],
             );
           },
-        ),
-      ),
-    );
+        );
   }
 }
 

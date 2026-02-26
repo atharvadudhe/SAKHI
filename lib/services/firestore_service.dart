@@ -8,6 +8,7 @@ import '../models/session_model.dart';
 import '../models/location_update.dart';
 import '../models/emergency_contact.dart';
 import '../models/broadcast_model.dart';
+import '../models/live_location_model.dart';
 
 class FirestoreService {
   FirestoreService._();
@@ -385,6 +386,42 @@ class FirestoreService {
     });
   }
 
+  // ───────── Live Location Tracking ─────────
+
+  /// Upsert a live-location document (keyed by uid).
+  /// This is the single write target for real-time tracking.
+  Future<void> upsertLiveLocation(LiveLocationModel loc) async {
+    await _db
+        .collection(AppConstants.liveLocationsCollection)
+        .doc(loc.uid)
+        .set(loc.toJson(), SetOptions(merge: true));
+  }
+
+  /// Deactivate a user's live location (mark offline).
+  Future<void> deactivateLiveLocation(String uid) async {
+    await _db
+        .collection(AppConstants.liveLocationsCollection)
+        .doc(uid)
+        .update({
+      'isActive': false,
+      'lastUpdatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Stream all currently active live-location documents.
+  /// Used by the Admin dashboard map.
+  Stream<List<LiveLocationModel>> activeLiveLocationsStream() {
+    return _db
+        .collection(AppConstants.liveLocationsCollection)
+        .where('isActive', isEqualTo: true)
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((doc) => LiveLocationModel.fromJson(doc.data()))
+              .toList(),
+        );
+  }
+
   // ───────── Admin Operations ─────────
 
   /// Stream all registered users (admin only)
@@ -420,5 +457,69 @@ class FirestoreService {
     await _db.collection(AppConstants.usersCollection).doc(uid).update({
       'role': role,
     });
+  }
+
+  // ───────── Duress PIN Operations ─────────
+
+  /// Save Safe PIN and Duress PIN to user profile.
+  Future<void> savePins({
+    required String uid,
+    required String safePin,
+    required String duressPin,
+  }) async {
+    await _db.collection(AppConstants.usersCollection).doc(uid).update({
+      'safePin': safePin,
+      'duressPin': duressPin,
+    });
+  }
+
+  /// Mark all active broadcasts from [uid] as duress-active.
+  /// Called when a duress PIN cancellation is triggered.
+  Future<void> activateDuressOnBroadcasts(String uid) async {
+    final snap = await _db
+        .collection(AppConstants.broadcastsCollection)
+        .where('uid', isEqualTo: uid)
+        .orderBy('timestamp', descending: true)
+        .limit(5)
+        .get();
+
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      batch.update(doc.reference, {'isDuressActive': true});
+    }
+    await batch.commit();
+  }
+
+  // ───────── Volunteer Verification (KYC) ─────────
+
+  /// Update the user's KYC verification status.
+  Future<void> updateVerificationStatus(
+    String uid,
+    String status, {
+    String? idFrontUrl,
+    String? idBackUrl,
+  }) async {
+    final data = <String, dynamic>{'verificationStatus': status};
+    if (idFrontUrl != null) data['idFrontUrl'] = idFrontUrl;
+    if (idBackUrl != null) data['idBackUrl'] = idBackUrl;
+    await _db.collection(AppConstants.usersCollection).doc(uid).update(data);
+  }
+
+  // ───────── Evidence Vault ─────────
+
+  /// Save evidence metadata (hash, URL, timestamp) for a session.
+  Future<void> saveSessionEvidence({
+    required String sessionId,
+    required String downloadUrl,
+    required String sha256Hash,
+    required DateTime recordedAt,
+  }) async {
+    await _db.collection('session_evidence').doc(sessionId).set({
+      'sessionId': sessionId,
+      'downloadUrl': downloadUrl,
+      'sha256Hash': sha256Hash,
+      'recordedAt': Timestamp.fromDate(recordedAt),
+      'uploadedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 }

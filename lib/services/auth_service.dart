@@ -80,19 +80,37 @@ class AuthService {
   }
 
   /// Check if user profile exists in Firestore
-  Future<bool> hasProfile() async {
+  /// Retries up to [maxRetries] times with exponential backoff on transient
+  /// Firestore errors (e.g. unavailable).
+  Future<bool> hasProfile({int maxRetries = 3}) async {
     if (currentUser == null) return false;
-    final doc = await _firestore
-        .collection(AppConstants.usersCollection)
-        .doc(currentUser!.uid)
-        .get();
-    return doc.exists;
+
+    for (int attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        final doc = await _firestore
+            .collection(AppConstants.usersCollection)
+            .doc(currentUser!.uid)
+            .get(const GetOptions(source: Source.server));
+        return doc.exists;
+      } on FirebaseException catch (e) {
+        // Retry on transient errors (unavailable / deadline-exceeded)
+        final retryable = e.code == 'unavailable' ||
+            e.code == 'deadline-exceeded';
+        if (!retryable || attempt == maxRetries) rethrow;
+        // Exponential backoff: 1s, 2s, 4s …
+        await Future.delayed(Duration(seconds: 1 << attempt));
+      }
+    }
+    return false; // unreachable, but satisfies return type
   }
 
-  /// Create user profile after first login
+  /// Create user profile after first login.
+  /// Times out after [timeoutSeconds] to avoid hanging when Firestore is
+  /// unreachable.
   Future<void> createProfile({
     required String name,
     required UserRole role,
+    int timeoutSeconds = 15,
   }) async {
     final user = currentUser;
     if (user == null) throw Exception('Not authenticated');
@@ -107,7 +125,15 @@ class AuthService {
     await _firestore
         .collection(AppConstants.usersCollection)
         .doc(user.uid)
-        .set(userModel.toJson());
+        .set(userModel.toJson())
+        .timeout(
+          Duration(seconds: timeoutSeconds),
+          onTimeout: () => throw Exception(
+            'Firestore is not responding. Please check your internet '
+            'connection and ensure the Firestore database has been created '
+            'in the Firebase Console.',
+          ),
+        );
   }
 
   /// Sign out

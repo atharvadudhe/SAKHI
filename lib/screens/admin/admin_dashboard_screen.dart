@@ -2,10 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:intl/intl.dart';
 
 import '../../config/theme.dart';
 import '../../models/user_model.dart';
 import '../../models/session_model.dart';
+import '../../models/live_location_model.dart';
 
 import '../../providers/providers.dart';
 import '../../services/auth_service.dart';
@@ -205,137 +207,357 @@ class _NavItem {
 }
 
 // ─────────────────────────────────────────────────────
-// Tab 1 — God-Mode Map
+// Tab 1 — God-Mode Live Map
 // ─────────────────────────────────────────────────────
-class _GodModeMapTab extends ConsumerWidget {
+class _GodModeMapTab extends ConsumerStatefulWidget {
   final void Function(GoogleMapController) onMapCreated;
 
   const _GodModeMapTab({required this.onMapCreated});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final usersAsync = ref.watch(allUsersProvider);
-    final sessionsAsync = ref.watch(allActiveSessionsProvider);
-    final broadcastsAsync = ref.watch(broadcastsFeedProvider);
-    final theme = Theme.of(context);
+  ConsumerState<_GodModeMapTab> createState() => _GodModeMapTabState();
+}
 
-    final users = usersAsync.value ?? [];
-    final sessions = sessionsAsync.value ?? [];
-    final broadcasts = broadcastsAsync.value ?? [];
+class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
+  /// Currently selected marker for the detail panel.
+  LiveLocationModel? _selectedTracker;
+  final _timeFormat = DateFormat('hh:mm:ss a');
 
+  // ── Marker builder ──
+
+  Set<Marker> _buildMarkers(
+    List<LiveLocationModel> trackers,
+    List<SessionModel> sessions,
+  ) {
     final markers = <Marker>{};
 
-    // Active users with location
-    for (final u in users) {
-      if (u.currentLocation != null) {
-        final isVol = u.role == UserRole.volunteer;
-        markers.add(
-          Marker(
-            markerId: MarkerId('user_${u.uid}'),
-            position: LatLng(
-              u.currentLocation!.latitude,
-              u.currentLocation!.longitude,
-            ),
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-              isVol ? BitmapDescriptor.hueGreen : BitmapDescriptor.hueAzure,
-            ),
-            infoWindow: InfoWindow(
-              title: u.name,
-              snippet: isVol ? 'Volunteer' : 'User',
-            ),
-          ),
-        );
+    // 1. Live trackers from the liveLocations collection
+    for (final t in trackers) {
+      // Determine colour based on tracking reason + role
+      double hue;
+      switch (t.trackingReason) {
+        case TrackingReason.sos:
+          hue = BitmapDescriptor.hueRed; // 🔴 SOS
+        case TrackingReason.volunteerDuty:
+          hue = BitmapDescriptor.hueGreen; // 🟢 Active volunteer
+        case TrackingReason.session:
+          hue = t.role == 'volunteer'
+              ? BitmapDescriptor.hueGreen
+              : BitmapDescriptor.hueAzure; // 🔵 Regular user session
       }
+
+      markers.add(
+        Marker(
+          markerId: MarkerId('live_${t.uid}'),
+          position: LatLng(t.latitude, t.longitude),
+          icon: BitmapDescriptor.defaultMarkerWithHue(hue),
+          infoWindow: InfoWindow(
+            title: t.userName,
+            snippet: _snippetFor(t),
+          ),
+          onTap: () => setState(() => _selectedTracker = t),
+        ),
+      );
     }
 
-    // Active SOS sessions
+    // 2. SOS sessions that may not (yet) have a liveLocations entry
+    final trackedUids = trackers.map((t) => t.uid).toSet();
     for (final s in sessions) {
-      if (s.userLocation != null && s.isSOS) {
+      if (s.isSOS && s.userLocation != null && !trackedUids.contains(s.createdBy)) {
         markers.add(
           Marker(
-            markerId: MarkerId('sos_${s.sessionId}'),
+            markerId: MarkerId('sos_session_${s.sessionId}'),
             position: LatLng(
               s.userLocation!.latitude,
               s.userLocation!.longitude,
             ),
             icon:
                 BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-            infoWindow: const InfoWindow(title: 'SOS Active'),
+            infoWindow: InfoWindow(
+              title: 'SOS (session)',
+              snippet: 'Session ${s.sessionId.substring(0, 8)}',
+            ),
           ),
         );
       }
     }
 
-    // Broadcasts
-    for (final b in broadcasts) {
-      markers.add(
-        Marker(
-          markerId: MarkerId('bcast_${b.id}'),
-          position: LatLng(b.location.latitude, b.location.longitude),
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-              BitmapDescriptor.hueYellow),
-          infoWindow: InfoWindow(
-            title: b.alertLabel,
-            snippet: b.message,
-          ),
+    return markers;
+  }
+
+  String _snippetFor(LiveLocationModel t) {
+    final roleLbl = t.role == 'volunteer' ? 'Volunteer' : 'User';
+    final reasonLbl = switch (t.trackingReason) {
+      TrackingReason.sos => '• SOS',
+      TrackingReason.volunteerDuty => '• On Duty',
+      TrackingReason.session => '• Session',
+    };
+    return '$roleLbl $reasonLbl • ${t.timeSinceUpdate}';
+  }
+
+  // ── Info Detail Panel ──
+
+  Widget _buildInfoPanel(ThemeData theme) {
+    final t = _selectedTracker;
+    if (t == null) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+        child: Row(
+          children: [
+            Icon(Icons.touch_app_rounded,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+            const SizedBox(width: 10),
+            Text(
+              'Tap a marker on the map to see details',
+              style: TextStyle(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+              ),
+            ),
+          ],
         ),
       );
     }
 
-    // Stats bar
-    final activeVolunteers =
-        users.where((u) => u.role == UserRole.volunteer && u.isAvailable).length;
-    final sosSessions = sessions.where((s) => s.isSOS).length;
+    Color markerColor;
+    String reasonLabel;
+    switch (t.trackingReason) {
+      case TrackingReason.sos:
+        markerColor = SakhiTheme.danger;
+        reasonLabel = 'SOS';
+      case TrackingReason.volunteerDuty:
+        markerColor = SakhiTheme.safe;
+        reasonLabel = 'Volunteer Duty';
+      case TrackingReason.session:
+        markerColor = SakhiTheme.connected;
+        reasonLabel = 'Safety Session';
+    }
 
-    return Column(
-      children: [
-        // Stats ribbon
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
-          child: Row(
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+      child: Row(
+        children: [
+          // ── Avatar ──
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: markerColor.withValues(alpha: 0.15),
+            child: Text(
+              t.userName.isNotEmpty ? t.userName[0].toUpperCase() : '?',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: markerColor,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+
+          // ── Name + role ──
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  t.userName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${t.role == 'volunteer' ? 'Volunteer' : 'User'} • $reasonLabel',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color:
+                        theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Reason badge ──
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: markerColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: markerColor.withValues(alpha: 0.3)),
+            ),
+            child: Text(
+              reasonLabel,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: markerColor,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+
+          // ── Battery ──
+          if (t.batteryLevel != null) ...[
+            Icon(
+              t.batteryLevel! > 20
+                  ? Icons.battery_std_rounded
+                  : Icons.battery_alert_rounded,
+              size: 18,
+              color: t.batteryLevel! > 20 ? SakhiTheme.safe : SakhiTheme.danger,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '${t.batteryLevel}%',
+              style: const TextStyle(fontSize: 12),
+            ),
+            const SizedBox(width: 16),
+          ],
+
+          // ── Last update ──
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _StatChip(
-                label: '${users.length} Users',
-                color: SakhiTheme.connected,
+              Text(
+                _timeFormat.format(t.lastUpdatedAt),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              const SizedBox(width: 16),
-              _StatChip(
-                label: '$activeVolunteers Volunteers online',
-                color: SakhiTheme.safe,
-              ),
-              const SizedBox(width: 16),
-              _StatChip(
-                label: '${sessions.length} Active sessions',
-                color: SakhiTheme.searching,
-              ),
-              const SizedBox(width: 16),
-              _StatChip(
-                label: '$sosSessions SOS',
-                color: SakhiTheme.danger,
-              ),
-              const SizedBox(width: 16),
-              _StatChip(
-                label: '${broadcasts.length} Broadcasts',
-                color: SakhiTheme.searching,
+              Text(
+                t.timeSinceUpdate,
+                style: TextStyle(
+                  fontSize: 11,
+                  color:
+                      theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
               ),
             ],
           ),
+          const SizedBox(width: 8),
+
+          // ── Close button ──
+          IconButton(
+            icon: const Icon(Icons.close_rounded, size: 18),
+            onPressed: () => setState(() => _selectedTracker = null),
+            tooltip: 'Close',
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Build ──
+
+  @override
+  Widget build(BuildContext context) {
+    final liveAsync = ref.watch(activeLiveLocationsProvider);
+    final sessionsAsync = ref.watch(allActiveSessionsProvider);
+    final usersAsync = ref.watch(allUsersProvider);
+    final theme = Theme.of(context);
+
+    final trackers = liveAsync.value ?? [];
+    final sessions = sessionsAsync.value ?? [];
+    final users = usersAsync.value ?? [];
+    final markers = _buildMarkers(trackers, sessions);
+
+    // Stats
+    final sosCount =
+        trackers.where((t) => t.trackingReason == TrackingReason.sos).length +
+            sessions.where((s) => s.isSOS).length;
+    final volunteerCount =
+        trackers.where((t) => t.role == 'volunteer').length;
+    final sessionUserCount =
+        trackers.where((t) => t.role == 'user').length;
+    final totalUsers = users.length;
+
+    return Column(
+      children: [
+        // ── Stats ribbon ──
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+          color:
+              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+          child: Row(
+            children: [
+              _StatChip(
+                label: '$totalUsers Registered',
+                color: SakhiTheme.connected,
+              ),
+              const SizedBox(width: 12),
+              _StatChip(
+                label: '$volunteerCount Volunteers live',
+                color: SakhiTheme.safe,
+              ),
+              const SizedBox(width: 12),
+              _StatChip(
+                label: '$sessionUserCount Users tracking',
+                color: SakhiTheme.connected,
+              ),
+              const SizedBox(width: 12),
+              _StatChip(
+                label: '$sosCount SOS',
+                color: SakhiTheme.danger,
+              ),
+              const SizedBox(width: 12),
+              _StatChip(
+                label: '${markers.length} Markers',
+                color: SakhiTheme.searching,
+              ),
+              const Spacer(),
+              // Legend
+              _LegendDot(color: SakhiTheme.danger, label: 'SOS'),
+              const SizedBox(width: 10),
+              _LegendDot(color: SakhiTheme.safe, label: 'Volunteer'),
+              const SizedBox(width: 10),
+              _LegendDot(color: SakhiTheme.connected, label: 'User'),
+            ],
+          ),
         ),
-        // Map
+
+        // ── Map ──
         Expanded(
           child: GoogleMap(
             initialCameraPosition: const CameraPosition(
-              target: LatLng(20.5937, 78.9629), // Center of India
+              target: LatLng(20.5937, 78.9629), // Centre of India
               zoom: 5,
             ),
             markers: markers,
             myLocationEnabled: false,
             zoomControlsEnabled: true,
             mapToolbarEnabled: false,
-            onMapCreated: onMapCreated,
+            onMapCreated: widget.onMapCreated,
           ),
         ),
+
+        // ── Info Detail Panel ──
+        _buildInfoPanel(theme),
+      ],
+    );
+  }
+}
+
+// ── Legend dot for the stats ribbon ──
+class _LegendDot extends StatelessWidget {
+  final Color color;
+  final String label;
+  const _LegendDot({required this.color, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+        ),
+        const SizedBox(width: 4),
+        Text(label, style: const TextStyle(fontSize: 11)),
       ],
     );
   }
