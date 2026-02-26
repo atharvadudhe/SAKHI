@@ -12,6 +12,7 @@ import '../../models/live_location_model.dart';
 import '../../providers/providers.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
+import 'widgets/pending_volunteers_list.dart';
 
 /// Admin dashboard — web-only.
 class AdminDashboardScreen extends ConsumerStatefulWidget {
@@ -31,6 +32,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     _NavItem(icon: Icons.map_rounded, label: 'Map'),
     _NavItem(icon: Icons.warning_rounded, label: 'Live Alerts'),
     _NavItem(icon: Icons.people_rounded, label: 'Users'),
+    _NavItem(icon: Icons.verified_user_rounded, label: 'Verification'),
   ];
 
   @override
@@ -188,6 +190,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 ),
               1 => const _LiveAlertsTab(),
               2 => const _UserManagementTab(),
+              3 => const PendingVolunteersList(),
               _ => const SizedBox.shrink(),
             },
           ),
