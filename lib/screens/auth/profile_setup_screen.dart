@@ -45,16 +45,21 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         }
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: SakhiTheme.danger,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      String msg = e.toString();
+      if (msg.contains('unavailable') || msg.contains('not responding')) {
+        msg = 'Could not connect to the server. Please check your internet '
+              'connection and try again.';
       }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: SakhiTheme.danger,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 5),
+        ),
+      );
     }
   }
 
