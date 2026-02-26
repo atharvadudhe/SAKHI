@@ -14,6 +14,8 @@ import '../../services/location_service.dart';
 import '../../widgets/sos_button.dart';
 import '../../widgets/session_status_card.dart';
 import '../../models/broadcast_model.dart';
+import '../../services/hardware_trigger_service.dart';
+import '../../services/evidence_service.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -56,12 +58,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         setState(() => _tipIndex = (_tipIndex + 1) % _safetyTips.length);
       }
     });
+
+    // Wire hardware-trigger SOS to the same SOS handler used by the button
+    HardwareTriggerService.instance.onSOSTriggered = () {
+      if (mounted) _showHardwareSOSConfirmation();
+    };
   }
 
   @override
   void dispose() {
     _tipTimer.cancel();
     _fadeController.dispose();
+    HardwareTriggerService.instance.onSOSTriggered = null;
     super.dispose();
   }
 
@@ -100,6 +108,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ref
           .read(sessionControllerProvider.notifier)
           .triggerSOS(session.sessionId);
+
+      // Start covert evidence recording (non-blocking).
+      EvidenceService.instance.startCovertRecording(session.sessionId);
     }
 
     // 2. Also send an SOS broadcast to nearby volunteers
@@ -172,6 +183,122 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         ],
       ),
     );
+  }
+
+  // ── Hardware SOS confirmation (triggered from volume buttons) ──
+
+  void _showHardwareSOSConfirmation() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        icon: const Icon(
+          Icons.warning_rounded,
+          color: SakhiTheme.danger,
+          size: 48,
+        ),
+        title: const Text('Hardware SOS Activated'),
+        content: const Text(
+          'Rapid volume-button presses detected.\n'
+          'An emergency broadcast has been sent to nearby volunteers '
+          'and your live location is being shared.',
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Fake Call Bottom Sheet ──
+
+  void _showFakeCallBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Schedule Fake Call',
+                  style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Choose a delay — the fake incoming call will appear after '
+                  'the selected time.',
+                  style: TextStyle(
+                    color: Theme.of(ctx)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.6),
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _FakeCallDelayTile(
+                  label: '5 seconds',
+                  icon: Icons.timer_rounded,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _scheduleFakeCall(const Duration(seconds: 5));
+                  },
+                ),
+                _FakeCallDelayTile(
+                  label: '15 seconds',
+                  icon: Icons.timer_rounded,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _scheduleFakeCall(const Duration(seconds: 15));
+                  },
+                ),
+                _FakeCallDelayTile(
+                  label: '1 minute',
+                  icon: Icons.timer_rounded,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _scheduleFakeCall(const Duration(minutes: 1));
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _scheduleFakeCall(Duration delay) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Fake call scheduled in ${delay.inSeconds >= 60 ? '${delay.inMinutes} minute' : '${delay.inSeconds} seconds'}',
+        ),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    Future.delayed(delay, () {
+      if (!mounted) return;
+      context.push('/fake-call', extra: {
+        'callerName': 'Mom',
+        'callerLabel': 'Mobile',
+      });
+    });
   }
 
   @override
@@ -328,6 +455,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               subtitle: 'Manage contacts',
                               color: SakhiTheme.danger,
                               onTap: () => context.push('/emergency-contacts'),
+                            ),
+                            _QuickActionCard(
+                              icon: Icons.phone_callback_rounded,
+                              title: 'Fake Call',
+                              subtitle: 'De-escalation tool',
+                              color: SakhiTheme.primaryDark,
+                              onTap: _showFakeCallBottomSheet,
+                            ),
+                            _QuickActionCard(
+                              icon: Icons.directions_walk_rounded,
+                              title: 'Walk With Me',
+                              subtitle: 'Virtual companion',
+                              color: SakhiTheme.connected,
+                              onTap: () =>
+                                  context.push('/virtual-companion-setup'),
                             ),
                           ],
                         ),
@@ -746,6 +888,30 @@ class _AlertFeedCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ── Fake-call delay option tile ──
+class _FakeCallDelayTile extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _FakeCallDelayTile({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, color: SakhiTheme.primary),
+      title: Text(label),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      onTap: onTap,
     );
   }
 }
