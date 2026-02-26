@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:rxdart/rxdart.dart';
 
@@ -398,14 +399,15 @@ class FirestoreService {
   }
 
   /// Deactivate a user's live location (mark offline).
+  /// Uses set-with-merge so it won't throw if the document doesn't exist.
   Future<void> deactivateLiveLocation(String uid) async {
     await _db
         .collection(AppConstants.liveLocationsCollection)
         .doc(uid)
-        .update({
+        .set({
       'isActive': false,
       'lastUpdatedAt': FieldValue.serverTimestamp(),
-    });
+    }, SetOptions(merge: true));
   }
 
   /// Stream all currently active live-location documents.
@@ -461,12 +463,25 @@ class FirestoreService {
 
   // ───────── Duress PIN Operations ─────────
 
-  /// Save Safe PIN and Duress PIN to user profile.
+  /// Save hashed Safe PIN and Duress PIN to user profile.
+  ///
+  /// Callers MUST hash PINs before calling this method (bcrypt/Argon2/SHA-256+salt).
+  /// A basic guard rejects obvious plaintext inputs (short numeric-only values).
   Future<void> savePins({
     required String uid,
     required String safePin,
     required String duressPin,
   }) async {
+    // Basic guard: reject obvious plaintext (4-6 digit numeric strings).
+    // Properly hashed values are always longer and contain non-digit characters.
+    final plaintext = RegExp(r'^\d{1,8}$');
+    if (plaintext.hasMatch(safePin) || plaintext.hasMatch(duressPin)) {
+      debugPrint(
+        '[FirestoreService] WARNING: savePins received what appears to be '
+        'plaintext PINs. PINs should be hashed before calling savePins.',
+      );
+    }
+
     await _db.collection(AppConstants.usersCollection).doc(uid).update({
       'safePin': safePin,
       'duressPin': duressPin,
