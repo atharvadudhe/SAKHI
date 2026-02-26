@@ -113,6 +113,7 @@ class AuthService {
   Future<void> createProfile({
     required String name,
     required UserRole role,
+    String? photoUrl,
     int timeoutSeconds = 15,
   }) async {
     final user = currentUser;
@@ -123,6 +124,7 @@ class AuthService {
       name: name,
       phone: user.phoneNumber ?? '',
       role: role,
+      photoUrl: photoUrl,
     );
 
     await _firestore
