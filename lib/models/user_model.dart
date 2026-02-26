@@ -108,6 +108,8 @@ class UserModel {
     String? safePin,
     String? duressPin,
     VerificationStatus? verificationStatus,
+    bool clearSafePin = false,
+    bool clearDuressPin = false,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -118,16 +120,21 @@ class UserModel {
       currentLocation: currentLocation ?? this.currentLocation,
       lastHeartbeat: lastHeartbeat ?? this.lastHeartbeat,
       verifiedStatus: verifiedStatus ?? this.verifiedStatus,
-      safePin: safePin ?? this.safePin,
-      duressPin: duressPin ?? this.duressPin,
+      safePin: clearSafePin ? null : (safePin ?? this.safePin),
+      duressPin: clearDuressPin ? null : (duressPin ?? this.duressPin),
       verificationStatus: verificationStatus ?? this.verificationStatus,
     );
   }
 
   /// Whether the user has configured both PINs for duress cancellation.
-  bool get hasDuressPinSetup =>
-      safePin != null &&
-      safePin!.length == 4 &&
-      duressPin != null &&
-      duressPin!.length == 4;
+  /// Requires both PINs to be non-null, exactly 4 digits, numeric-only,
+  /// and different from each other.
+  bool get hasDuressPinSetup {
+    final digitPattern = RegExp(r'^\d{4}$');
+    return safePin != null &&
+        digitPattern.hasMatch(safePin!) &&
+        duressPin != null &&
+        digitPattern.hasMatch(duressPin!) &&
+        safePin != duressPin;
+  }
 }
