@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../services/auth_service.dart';
 import '../../models/user_model.dart';
@@ -15,8 +17,11 @@ class ProfileSetupScreen extends StatefulWidget {
 class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _nameController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  final _picker = ImagePicker();
   UserRole _selectedRole = UserRole.user;
   bool _isLoading = false;
+  XFile? _profileImage;
+  String? _photoValidationError;
 
   @override
   void dispose() {
@@ -24,15 +29,60 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     super.dispose();
   }
 
+  Future<void> _pickProfileImage() async {
+    final file = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+      maxWidth: 600,
+    );
+    if (file == null) return;
+    setState(() {
+      _profileImage = file;
+      _photoValidationError = null;
+    });
+  }
+
+  Future<String?> _uploadProfilePhoto(String uid) async {
+    if (_profileImage == null) return null;
+    final ref = FirebaseStorage.instance
+        .ref()
+        .child('profile_photos/$uid.jpg');
+
+    UploadTask task;
+    final bytes = await _profileImage!.readAsBytes();
+    task = ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+
+    final snapshot = await task;
+    return await snapshot.ref.getDownloadURL();
+  }
+
   Future<void> _createProfile() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Validate photo for volunteers
+    if (_selectedRole == UserRole.volunteer && _profileImage == null) {
+      setState(() {
+        _photoValidationError =
+            'Profile photo is required for volunteers';
+      });
+      return;
+    }
 
     setState(() => _isLoading = true);
 
     try {
+      final uid = AuthService.instance.currentUser?.uid;
+
+      // Upload profile photo if selected
+      String? photoUrl;
+      if (_profileImage != null && uid != null) {
+        photoUrl = await _uploadProfilePhoto(uid);
+      }
+
       await AuthService.instance.createProfile(
         name: _nameController.text.trim(),
         role: _selectedRole,
+        photoUrl: photoUrl,
       );
 
       if (mounted) {
@@ -75,19 +125,111 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 60),
-                // Header
+                // Profile photo picker
                 Center(
-                  child: Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: SakhiTheme.primary.withValues(alpha: 0.1),
-                    ),
-                    child: const Icon(
-                      Icons.person_rounded,
-                      size: 40,
-                      color: SakhiTheme.primary,
+                  child: GestureDetector(
+                    onTap: _pickProfileImage,
+                    child: Column(
+                      children: [
+                        Stack(
+                          children: [
+                            Container(
+                              width: 100,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: SakhiTheme.primary.withValues(alpha: 0.1),
+                                border: Border.all(
+                                  color: _photoValidationError != null
+                                      ? SakhiTheme.danger
+                                      : (_profileImage != null
+                                          ? SakhiTheme.safe
+                                          : Colors.transparent),
+                                  width: 2,
+                                ),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: _profileImage != null
+                                  ? FutureBuilder<List<int>>(
+                                      future: _profileImage!.readAsBytes(),
+                                      builder: (context, snapshot) {
+                                        if (snapshot.hasData) {
+                                          return Image.memory(
+                                            snapshot.data! as dynamic,
+                                            fit: BoxFit.cover,
+                                            width: 100,
+                                            height: 100,
+                                          );
+                                        }
+                                        return const Icon(
+                                          Icons.person_rounded,
+                                          size: 50,
+                                          color: SakhiTheme.primary,
+                                        );
+                                      },
+                                    )
+                                  : const Icon(
+                                      Icons.person_rounded,
+                                      size: 50,
+                                      color: SakhiTheme.primary,
+                                    ),
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: SakhiTheme.primary,
+                                  border: Border.all(color: Colors.white, width: 2),
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt_rounded,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _profileImage != null ? 'Tap to change' : 'Add Photo',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: _photoValidationError != null
+                                ? SakhiTheme.danger
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.6),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        if (_selectedRole == UserRole.volunteer)
+                          Text(
+                            'Required for volunteers',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: _photoValidationError != null
+                                  ? SakhiTheme.danger
+                                  : SakhiTheme.searching,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        if (_photoValidationError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              _photoValidationError!,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: SakhiTheme.danger,
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
@@ -149,7 +291,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                         isSelected: _selectedRole == UserRole.user,
                         color: SakhiTheme.primary,
                         onTap: () =>
-                            setState(() => _selectedRole = UserRole.user),
+                            setState(() {
+                              _selectedRole = UserRole.user;
+                              _photoValidationError = null;
+                            }),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -161,7 +306,10 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                         isSelected: _selectedRole == UserRole.volunteer,
                         color: SakhiTheme.safe,
                         onTap: () =>
-                            setState(() => _selectedRole = UserRole.volunteer),
+                            setState(() {
+                              _selectedRole = UserRole.volunteer;
+                              _photoValidationError = null;
+                            }),
                       ),
                     ),
                   ],
