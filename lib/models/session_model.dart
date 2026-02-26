@@ -14,6 +14,8 @@ class SessionModel {
   final DateTime lastUpdate;
   final GeoPoint? destinationLocation;
   final GeoPoint? userLocation;
+  final DateTime? estimatedArrivalTime;
+  final bool isVirtualCompanionActive;
 
   const SessionModel({
     required this.sessionId,
@@ -27,6 +29,8 @@ class SessionModel {
     required this.lastUpdate,
     this.destinationLocation,
     this.userLocation,
+    this.estimatedArrivalTime,
+    this.isVirtualCompanionActive = false,
   });
 
   factory SessionModel.fromJson(Map<String, dynamic> json) {
@@ -44,6 +48,11 @@ class SessionModel {
       lastUpdate: (json['lastUpdate'] as Timestamp).toDate(),
       destinationLocation: json['destinationLocation'] as GeoPoint?,
       userLocation: json['userLocation'] as GeoPoint?,
+      estimatedArrivalTime: json['estimatedArrivalTime'] != null
+          ? (json['estimatedArrivalTime'] as Timestamp).toDate()
+          : null,
+      isVirtualCompanionActive:
+          json['isVirtualCompanionActive'] as bool? ?? false,
     );
   }
 
@@ -59,6 +68,10 @@ class SessionModel {
     'lastUpdate': Timestamp.fromDate(lastUpdate),
     'destinationLocation': destinationLocation,
     'userLocation': userLocation,
+    'estimatedArrivalTime': estimatedArrivalTime != null
+        ? Timestamp.fromDate(estimatedArrivalTime!)
+        : null,
+    'isVirtualCompanionActive': isVirtualCompanionActive,
   };
 
   static SessionStatus _parseStatus(String? status) {
@@ -88,6 +101,8 @@ class SessionModel {
     DateTime? lastUpdate,
     GeoPoint? destinationLocation,
     GeoPoint? userLocation,
+    DateTime? estimatedArrivalTime,
+    bool? isVirtualCompanionActive,
   }) {
     return SessionModel(
       sessionId: sessionId ?? this.sessionId,
@@ -101,6 +116,10 @@ class SessionModel {
       lastUpdate: lastUpdate ?? this.lastUpdate,
       destinationLocation: destinationLocation ?? this.destinationLocation,
       userLocation: userLocation ?? this.userLocation,
+      estimatedArrivalTime:
+          estimatedArrivalTime ?? this.estimatedArrivalTime,
+      isVirtualCompanionActive:
+          isVirtualCompanionActive ?? this.isVirtualCompanionActive,
     );
   }
 
