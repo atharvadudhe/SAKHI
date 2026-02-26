@@ -41,7 +41,29 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
   }
 
   void _endSession(String sessionId) {
-    final user = ref.read(currentUserProvider).value;
+    final userAsync = ref.read(currentUserProvider);
+
+    // If user data is still loading, disable the action.
+    if (userAsync.isLoading) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Loading user data… please wait.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (userAsync.hasError) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not load user data. Please try again.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final user = userAsync.value;
 
     // If user has duress PINs configured, show PIN dialog instead.
     if (user != null && user.hasDuressPinSetup) {
