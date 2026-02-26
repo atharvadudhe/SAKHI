@@ -54,7 +54,7 @@ class _VirtualCompanionSetupScreenState
         title: const Text('Walk With Me'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => context.pop(),
         ),
       ),
       body: SingleChildScrollView(
