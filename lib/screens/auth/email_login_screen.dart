@@ -49,7 +49,17 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
 
       if (!mounted) return;
 
-      final hasProfile = await AuthService.instance.hasProfile();
+      // Try checking Firestore profile; fall back to profile-setup on
+      // transient Firestore errors so the user isn't stuck.
+      bool hasProfile = false;
+      try {
+        hasProfile = await AuthService.instance.hasProfile();
+      } catch (firestoreError) {
+        debugPrint('Firestore profile check failed: $firestoreError');
+        // Signed in successfully – Firestore is temporarily unreachable.
+        // Send the user to profile-setup; it will reconcile once Firestore
+        // is available again.
+      }
       if (!mounted) return;
 
       context.go(hasProfile ? '/home' : '/profile-setup');
@@ -69,6 +79,9 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
         msg = 'Password is too weak. Use at least 6 characters.';
       } else if (msg.contains('invalid-email')) {
         msg = 'Please enter a valid email address.';
+      } else if (msg.contains('unavailable')) {
+        msg = 'Service temporarily unavailable. Please check your internet '
+              'connection and try again.';
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
