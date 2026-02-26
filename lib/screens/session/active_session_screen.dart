@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../config/theme.dart';
 import '../../models/session_model.dart';
+import '../../models/user_model.dart';
 import '../../providers/providers.dart';
+import '../../services/firestore_service.dart';
 import '../../widgets/sos_button.dart';
 
 class ActiveSessionScreen extends ConsumerStatefulWidget {
@@ -38,6 +41,15 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
   }
 
   void _endSession(String sessionId) {
+    final user = ref.read(currentUserProvider).value;
+
+    // If user has duress PINs configured, show PIN dialog instead.
+    if (user != null && user.hasDuressPinSetup) {
+      _showPinCancellationSheet(sessionId, user);
+      return;
+    }
+
+    // Fallback: simple confirmation dialog (no PINs set).
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -57,7 +69,7 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
               ref
                   .read(sessionControllerProvider.notifier)
                   .endSession(sessionId);
-              context.pop();
+              context.go('/home');
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: SakhiTheme.danger,
@@ -68,6 +80,160 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
         ],
       ),
     );
+  }
+
+  /// Shows a PIN-entry bottom sheet for duress-aware session cancellation.
+  void _showPinCancellationSheet(String sessionId, UserModel user) {
+    final pinController = TextEditingController();
+    String? errorText;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                24,
+                24,
+                24,
+                MediaQuery.of(ctx).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Icon(
+                    Icons.lock_outline_rounded,
+                    size: 40,
+                    color: SakhiTheme.primary,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Enter PIN to cancel SOS',
+                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Enter your cancellation PIN to end the session.',
+                    style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(ctx)
+                          .colorScheme
+                          .onSurface
+                          .withValues(alpha: 0.55),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    controller: pinController,
+                    obscureText: true,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    autofocus: true,
+                    textAlign: TextAlign.center,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    style: const TextStyle(
+                      fontSize: 28,
+                      letterSpacing: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    decoration: InputDecoration(
+                      counterText: '',
+                      errorText: errorText,
+                      hintText: '• • • •',
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        final pin = pinController.text.trim();
+                        if (pin.length != 4) {
+                          setSheetState(
+                            () => errorText = 'Enter a 4-digit PIN',
+                          );
+                          return;
+                        }
+
+                        if (pin == user.safePin) {
+                          // ── SAFE PIN: genuinely cancel ──
+                          Navigator.pop(ctx);
+                          ref
+                              .read(sessionControllerProvider.notifier)
+                              .endSession(sessionId);
+                          context.go('/home');
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Session ended safely.'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        } else if (pin == user.duressPin) {
+                          // ── DURESS PIN: fake-cancel ──
+                          // Do NOT end the session. Escalate silently.
+                          _handleDuressCancellation(sessionId, user.uid);
+                          Navigator.pop(ctx);
+                          context.go('/home');
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Session cancelled.'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        } else {
+                          setSheetState(() => errorText = 'Incorrect PIN');
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: SakhiTheme.primary,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text('Confirm'),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  /// Silently escalate: mark broadcasts as duress-active and trigger SOS
+  /// on the session—but do NOT end it.
+  Future<void> _handleDuressCancellation(
+    String sessionId,
+    String uid,
+  ) async {
+    try {
+      // Escalate session to SOS if not already.
+      await FirestoreService.instance.triggerSOS(sessionId);
+      // Mark associated broadcasts as duress-active.
+      await FirestoreService.instance.activateDuressOnBroadcasts(uid);
+    } catch (_) {
+      // Silent — the attacker must not see any failure UI.
+    }
   }
 
   void _triggerSOS(String sessionId) {
