@@ -26,14 +26,15 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
   bool _saving = false;
   bool _obscureSafe = true;
   bool _obscureDuress = true;
+  bool _pinsConfigured = false;
 
   @override
   void initState() {
     super.initState();
-    // Pre-fill if user already has PINs configured.
+    // Do NOT pre-fill PIN controllers — PINs should never be displayed.
+    // Instead, set a flag indicating whether PINs are already configured.
     final user = ref.read(currentUserProvider).value;
-    if (user?.safePin != null) _safePinController.text = user!.safePin!;
-    if (user?.duressPin != null) _duressController.text = user!.duressPin!;
+    _pinsConfigured = user?.safePin != null && user?.duressPin != null;
   }
 
   @override
@@ -47,6 +48,18 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Final cross-field safety check: duress PIN must differ from safe PIN
+    if (_duressController.text.trim() == _safePinController.text.trim()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Duress PIN must differ from Safe PIN'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: SakhiTheme.danger,
+        ),
+      );
+      return;
+    }
 
     final uid = ref.read(authStateProvider).value?.uid;
     if (uid == null) return;
@@ -67,10 +80,11 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
       );
       Navigator.of(context).pop();
     } catch (e) {
+      debugPrint('Failed to save PINs: $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to save PINs: $e'),
+        const SnackBar(
+          content: Text('Failed to save PINs. Please try again.'),
           behavior: SnackBarBehavior.floating,
           backgroundColor: SakhiTheme.danger,
         ),
