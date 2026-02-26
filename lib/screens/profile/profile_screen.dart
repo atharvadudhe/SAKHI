@@ -1,14 +1,79 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../config/theme.dart';
 import '../../providers/providers.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
 
-class ProfileScreen extends ConsumerWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  bool _uploadingPhoto = false;
+
+  Future<void> _changeProfilePhoto(String uid) async {
+    final picker = ImagePicker();
+    final file = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+      maxWidth: 600,
+    );
+    if (file == null || !mounted) return;
+
+    setState(() => _uploadingPhoto = true);
+    try {
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('profile_photos/$uid.jpg');
+      final bytes = await file.readAsBytes();
+      final task = storageRef.putData(
+        bytes,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+      final snapshot = await task;
+      final downloadUrl = await snapshot.ref.getDownloadURL();
+      await FirestoreService.instance.updatePhotoUrl(uid, downloadUrl);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile photo updated!'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } on FirebaseException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Upload failed: ${e.message}'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: SakhiTheme.danger,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Something went wrong: $e'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: SakhiTheme.danger,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
 
   void _showEditNameDialog(
     BuildContext context,
@@ -59,7 +124,7 @@ class ProfileScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final userAsync = ref.watch(currentUserProvider);
 
     return Scaffold(
@@ -85,17 +150,68 @@ class ProfileScreen extends ConsumerWidget {
               Center(
                 child: Column(
                   children: [
-                    Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: SakhiTheme.primary.withValues(alpha: 0.1),
-                      ),
-                      child: const Icon(
-                        Icons.person_rounded,
-                        size: 50,
-                        color: SakhiTheme.primary,
+                    GestureDetector(
+                      onTap: _uploadingPhoto
+                          ? null
+                          : () => _changeProfilePhoto(user.uid),
+                      child: Stack(
+                        children: [
+                          Container(
+                            width: 100,
+                            height: 100,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: SakhiTheme.primary.withValues(alpha: 0.1),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: _uploadingPhoto
+                                ? const Center(
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : (user.photoUrl != null &&
+                                        user.photoUrl!.isNotEmpty)
+                                    ? Image.network(
+                                        user.photoUrl!,
+                                        fit: BoxFit.cover,
+                                        width: 100,
+                                        height: 100,
+                                        errorBuilder:
+                                            (context, error, stackTrace) =>
+                                                const Icon(
+                                          Icons.person_rounded,
+                                          size: 50,
+                                          color: SakhiTheme.primary,
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.person_rounded,
+                                        size: 50,
+                                        color: SakhiTheme.primary,
+                                      ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: SakhiTheme.primary,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt_rounded,
+                                size: 14,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 16),
