@@ -71,6 +71,13 @@ class FirestoreService {
     });
   }
 
+  /// Update user profile photo URL
+  Future<void> updatePhotoUrl(String uid, String photoUrl) async {
+    await _db.collection(AppConstants.usersCollection).doc(uid).update({
+      'photoUrl': photoUrl,
+    });
+  }
+
   // ───────── Session Operations ─────────
 
   /// Create a new safety session
@@ -517,7 +524,43 @@ class FirestoreService {
     final data = <String, dynamic>{'verificationStatus': status};
     if (idFrontUrl != null) data['idFrontUrl'] = idFrontUrl;
     if (idBackUrl != null) data['idBackUrl'] = idBackUrl;
+    if (status == 'pending') {
+      data['verificationSubmittedAt'] = FieldValue.serverTimestamp();
+    }
     await _db.collection(AppConstants.usersCollection).doc(uid).update(data);
+  }
+
+  /// Stream volunteers with a specific verification status (admin only).
+  Stream<List<UserModel>> volunteersWithStatusStream(String status) {
+    return _db
+        .collection(AppConstants.usersCollection)
+        .where('role', isEqualTo: 'volunteer')
+        .where('verificationStatus', isEqualTo: status)
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((doc) => UserModel.fromJson(doc.data()))
+              .toList(),
+        );
+  }
+
+  /// Approve a volunteer's KYC verification (admin only).
+  Future<void> approveVolunteer(String uid) async {
+    await _db.collection(AppConstants.usersCollection).doc(uid).update({
+      'verificationStatus': 'verified',
+      'verifiedStatus': true,
+    });
+  }
+
+  /// Reject a volunteer's KYC verification (admin only).
+  /// Clears ID URLs from Firestore. Caller should also delete storage files.
+  Future<void> rejectVolunteer(String uid) async {
+    await _db.collection(AppConstants.usersCollection).doc(uid).update({
+      'verificationStatus': 'rejected',
+      'verifiedStatus': false,
+      'idFrontUrl': FieldValue.delete(),
+      'idBackUrl': FieldValue.delete(),
+    });
   }
 
   // ───────── Evidence Vault ─────────
