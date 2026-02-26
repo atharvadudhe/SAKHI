@@ -49,16 +49,47 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
 
       if (!mounted) return;
 
-      // Try checking Firestore profile; fall back to profile-setup on
-      // transient Firestore errors so the user isn't stuck.
+      // Try checking Firestore profile; on transient Firestore errors
+      // show a retry dialog instead of silently routing to profile-setup.
       bool hasProfile = false;
+      bool firestoreReachable = true;
       try {
         hasProfile = await AuthService.instance.hasProfile();
       } catch (firestoreError) {
         debugPrint('Firestore profile check failed: $firestoreError');
-        // Signed in successfully – Firestore is temporarily unreachable.
-        // Send the user to profile-setup; it will reconcile once Firestore
-        // is available again.
+        firestoreReachable = false;
+      }
+      if (!mounted) return;
+
+      if (!firestoreReachable) {
+        // Firestore is unreachable — show retry dialog instead of
+        // blindly navigating to profile-setup.
+        setState(() => _isLoading = false);
+        final retry = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Connection Issue'),
+            content: const Text(
+              'Signed in successfully but could not verify your profile. '
+              'Please check your internet connection and try again.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        );
+        if (retry == true && mounted) {
+          _submit(); // retry the whole flow
+        }
+        return;
       }
       if (!mounted) return;
 
