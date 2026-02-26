@@ -264,6 +264,9 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
     final trackedUids = trackers.map((t) => t.uid).toSet();
     for (final s in sessions) {
       if (s.isSOS && s.userLocation != null && !trackedUids.contains(s.createdBy)) {
+        final safeId = s.sessionId.length >= 8
+            ? s.sessionId.substring(0, 8)
+            : s.sessionId;
         markers.add(
           Marker(
             markerId: MarkerId('sos_session_${s.sessionId}'),
@@ -275,7 +278,7 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
                 BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
             infoWindow: InfoWindow(
               title: 'SOS (session)',
-              snippet: 'Session ${s.sessionId.substring(0, 8)}',
+              snippet: 'Session $safeId',
             ),
           ),
         );
@@ -464,10 +467,12 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
     final users = usersAsync.value ?? [];
     final markers = _buildMarkers(trackers, sessions);
 
-    // Stats
+    // Stats — deduplicate SOS count so sessions whose user is already
+    // in the trackers list are not double-counted.
+    final trackedUids = trackers.map((t) => t.uid).toSet();
     final sosCount =
         trackers.where((t) => t.trackingReason == TrackingReason.sos).length +
-            sessions.where((s) => s.isSOS).length;
+            sessions.where((s) => s.isSOS && !trackedUids.contains(s.createdBy)).length;
     final volunteerCount =
         trackers.where((t) => t.role == 'volunteer').length;
     final sessionUserCount =
