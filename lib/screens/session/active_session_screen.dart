@@ -270,7 +270,63 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
     return Scaffold(
       body: sessionAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+        error: (e, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.cloud_off_rounded,
+                  size: 64,
+                  color: SakhiTheme.danger.withValues(alpha: 0.7),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Could not load session',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  e.toString().contains('failed-precondition')
+                      ? 'The database is still setting up. '
+                        'Please wait a minute and try again.'
+                      : 'Please check your connection and try again.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.6),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    OutlinedButton(
+                      onPressed: () => context.go('/home'),
+                      child: const Text('Go Home'),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: () => ref.invalidate(activeSessionProvider),
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text('Retry'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: SakhiTheme.primary,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
         data: (session) {
           if (session == null) {
             return Center(
