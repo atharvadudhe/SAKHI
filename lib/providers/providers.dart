@@ -285,6 +285,11 @@ final allActiveSessionsProvider = StreamProvider<List<SessionModel>>((ref) {
   return FirestoreService.instance.allActiveSessionsStream();
 });
 
+/// Stream of volunteers with pending verification (admin)
+final pendingVolunteersProvider = StreamProvider<List<UserModel>>((ref) {
+  return FirestoreService.instance.volunteersWithStatusStream('pending');
+});
+
 // ───────── Live Location Providers ─────────
 
 /// Stream of all actively-tracked live locations (admin map).
