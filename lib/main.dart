@@ -45,7 +45,10 @@ void main() async {
     // Initialize push notifications
     await NotificationService.instance.initialize();
 
-    // Initialize hardware-button SOS listener (volume-button trigger)
+    // Initialize hardware-button SOS listener (volume-button trigger).
+    // This is intentionally fire-and-forget: initialize() is synchronous
+    // (void) and sets up an internal stream listener. It handles its own
+    // errors internally and does not need to block Firebase readiness.
     HardwareTriggerService.instance.initialize();
 
     firebaseReady = true;
