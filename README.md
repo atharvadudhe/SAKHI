@@ -31,6 +31,23 @@
 - Recordings are SHA-256 hashed for tamper-proofing.
 - Uploaded to Firebase Storage; metadata (hash, URL, timestamp) saved in Firestore for chain-of-custody.
 
+### ⚖️ Legal & Compliance
+
+> **Warning — Covert audio recording is subject to strict legal constraints.**
+>
+> - Many jurisdictions require **all-party (two-party) consent** before recording conversations. Using the Evidence Vault feature without proper consent may violate wiretapping, eavesdropping, or surveillance laws.
+> - In **GDPR regions** (EU/EEA/UK), recording individuals constitutes processing of personal data and requires a lawful basis (e.g., legitimate interest for personal safety, explicit consent).
+> - **CCPA** and other US state privacy laws may impose additional obligations regarding disclosure and data subject rights.
+>
+> **Developers and deployers MUST:**
+> 1. Consult qualified legal counsel before enabling covert recording in any deployment.
+> 2. Implement **user notification and consent flows** appropriate to the target jurisdiction.
+> 3. Define and enforce **data-retention policies** — recordings and associated metadata should be retained only as long as legally required and then securely deleted.
+> 4. Provide a mechanism for **data deletion requests** (right to erasure) from recorded parties.
+> 5. Maintain **audit logs** of recording events for accountability.
+>
+> The authors of this project provide no legal advice. Compliance is the sole responsibility of the deployer.
+
 ### 🚶 Walk With Me (Virtual Companion)
 - Set a destination and expected travel duration (15 / 30 / 45 / 60 / 90 min).
 - Live countdown with circular progress ring.
@@ -49,6 +66,12 @@
 ### 👥 Volunteer System
 - Role-based onboarding: users choose "Stay Safe" or "Volunteer" at signup.
 - **KYC Verification** — government ID upload (front + back) to Firebase Storage; pending/verified/rejected status gates dashboard access.
+  - **Encryption**: All uploads are transmitted over TLS and stored with Firebase Storage server-side encryption at rest.
+  - **Data Retention & Deletion**: KYC images should be retained only for the duration required for verification. Once verified (or upon account deletion), images must be securely deleted from Firebase Storage. Implement a Cloud Function or admin procedure for periodic purging of expired KYC data.
+  - **GDPR / CCPA Compliance**: Users have the right to erasure of their KYC data. The lawful basis for processing government IDs is legitimate interest (volunteer safety vetting). Implement data-minimization by storing only the minimum required information.
+  - **Access Control**: KYC images are accessible only to admin-role users via Firebase Storage security rules and role-based Firestore access. No other users or volunteers can view uploaded IDs.
+  - **Audit Logging**: All verification status changes (pending → verified/rejected) should be logged with timestamps and the reviewing admin's UID for accountability.
+  - **Privacy Contact**: For data access/deletion requests related to KYC data, contact the project administrator.
 - Volunteer dashboard with availability toggle, live map of help requests, and accept/decline controls.
 
 ### 🖥️ Admin Dashboard (Web-Only)
@@ -87,7 +110,7 @@ lib/
 ├── config/
 │   ├── theme.dart                         # Material 3 light/dark themes
 │   ├── constants.dart                     # App-wide constants & Firestore collection names
-│   └── router.dart                        # GoRouter (17 routes)
+│   └── router.dart                        # GoRouter (19 routes)
 ├── models/
 │   ├── user_model.dart                    # User profile (roles, pins, KYC status)
 │   ├── session_model.dart                 # Safety session (status, timer, companion)
@@ -146,7 +169,9 @@ lib/
 
 | Collection                               | Key Fields                                                                                   |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `users`                                  | uid, name, phone, role, isAvailable, currentLocation, lastHeartbeat, safePin, duressPin, verificationStatus |
+| `users`                                  | uid, name, phone, role, isAvailable, currentLocation, lastHeartbeat, safePinHash, duressPinHash, verificationStatus |
+
+> **⚠️ PIN Storage**: `safePinHash` and `duressPinHash` must be stored as **cryptographic hashes only** (bcrypt, scrypt, or Argon2 — never SHA-256 alone). PINs must **never** be logged, transmitted, or stored in plaintext. Verification must compare a client-supplied PIN against the stored hash using the chosen hash library's verify function (server-side or client-side with secure transport). Any existing plaintext `safePin`/`duressPin` values must be migrated to hashed values immediately. Compromised PINs should be rotated by the user.
 | `users/{uid}/emergencyContacts`          | id, name, phone, relationship                                                               |
 | `sessions`                               | sessionId, createdBy, status, startTime, endTime, volunteerId, volunteerName, timeLimit, userLocation, destinationLocation, isVirtualCompanionActive |
 | `sessions/{id}/locationUpdates`          | uid, geoPoint, timestamp                                                                    |
@@ -159,12 +184,42 @@ Security rules: [`firestore.rules`](firestore.rules) — role-based access; user
 
 Composite indexes: [`firestore.indexes.json`](firestore.indexes.json) — 5 indexes for session, broadcast, and location share queries.
 
+### Privacy & Data Governance
+
+| Collection | Retention Policy | Notes |
+|---|---|---|
+| `users` | Retained until account deletion | Core profile data. `safePinHash`/`duressPinHash` are cryptographic hashes only. |
+| `users/{uid}/emergencyContacts` | Retained until user deletes contacts or account | User-managed CRUD. Deleted on account deletion. |
+| `sessions` | 90 days after session end | Completed sessions are eligible for automated cleanup via a scheduled Cloud Function. Active sessions are never pruned. |
+| `sessions/{id}/locationUpdates` | Same as parent session (90 days) | Purged when parent session document is deleted. |
+| `broadcasts` | 30 days after creation | Community alerts auto-expire. A Cloud Function with a TTL field (`expiresAt`) should delete stale documents. |
+| `locationShares` | Auto-deactivated on expiry; deleted after 7 days | `expiresAt` field drives automatic cleanup. |
+| `liveLocations` | Ephemeral — deactivated on session end | Documents are set to `isActive: false` on stop; a scheduled job should purge inactive entries older than 24 hours. |
+| `session_evidence` | 1 year (or per legal-hold requirements) | Audio recordings and hashes. Subject to legal retention. Firebase Storage files purged on the same schedule. |
+
+**User Right to Erasure / Account Deletion:**
+- Users may request full account deletion via the profile screen or by contacting the admin.
+- The deletion flow must remove: the `users/{uid}` document and all subcollections, all `sessions` created by the user, associated `locationUpdates`, `broadcasts`, `locationShares`, `liveLocations`, `session_evidence` records, and Firebase Storage files (KYC images, audio recordings).
+- Implement a Cloud Function (`deleteUserData`) triggered by Firebase Auth user deletion or an admin endpoint to cascade-delete all user-associated data.
+
+**Data Minimization & Automatic Cleanup:**
+- Add TTL fields (`expiresAt`) to `broadcasts`, `locationShares`, and `liveLocations`.
+- Deploy a scheduled Cloud Function (e.g., daily) to purge expired documents and associated Storage files.
+- Location history (`locationUpdates`) should be aggregated or deleted after the retention window.
+
+**Export & Portability:**
+- Users may request a data export (JSON) containing their profile, emergency contacts, session history, and broadcast history.
+- Implement an admin endpoint or Cloud Function (`exportUserData`) that collects and packages the user's data for download.
+
+**Mapping to Security Rules:**
+- `firestore.rules` enforces that users can only read/write their own data, volunteers can only modify assigned sessions, and admins have management access — aligning with data-access minimization requirements.
+
 ---
 
 ## Getting Started
 
 ### Prerequisites
-- Flutter SDK `>=3.35.0`
+- Flutter SDK (Dart `^3.11.0` — see `pubspec.yaml` environment.sdk)
 - Firebase project (Spark plan is sufficient for prototype)
 - Google Maps API key
 - Firebase CLI (for deploying rules & indexes)
@@ -185,6 +240,8 @@ Composite indexes: [`firestore.indexes.json`](firestore.indexes.json) — 5 inde
 3. **Create the Firestore database**
    - Go to Firebase Console → Firestore Database → **Create database**
    - Choose a region and start in **test mode**
+
+   > ⚠️ **Security Warning**: Test mode allows **unrestricted read/write access** to your entire Firestore database for 30 days. This is suitable only for initial development. **Deploy the project's security rules** (step 4 below) immediately after creating the database, and **switch to production mode** before any public or beta release to prevent unauthorized data access.
 
 4. **Deploy Firestore rules & indexes**
    ```bash
@@ -238,6 +295,12 @@ Composite indexes: [`firestore.indexes.json`](firestore.indexes.json) — 5 inde
 | Admin Dashboard with God-Mode Map (Web)                        | ✅ Complete |
 | Firestore Security Rules + Composite Indexes                   | ✅ Complete |
 | Battery Optimization & Background Stability                    | 📋 Planned  |
+
+> **Battery Optimization Notes (Planned):**
+> - **Heartbeat loop**: Currently fires every 30 s. Planned: adaptive backoff (30 s → 60 s → 120 s when idle) and suspension when the app is backgrounded and no active session exists.
+> - **Location polling**: Currently polls every 15 s via `startLocationUpdates`. Planned: switch to fused location / significant-change APIs and make the interval configurable per session type. Use geofencing for virtual companion instead of continuous polling.
+> - **Real-time tracking**: Currently always-on during sessions. Planned: make opt-in and pauseable; suspend writes when the device is stationary (no movement detected).
+> - **Background work**: On Android, location updates already run as a foreground service with notification. Planned: use WorkManager / JobScheduler for deferred tasks (evidence upload retries, heartbeat) to avoid being killed by the OS.
 
 ---
 
