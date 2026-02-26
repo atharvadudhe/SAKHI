@@ -83,13 +83,16 @@ class AuthService {
   /// Retries up to [maxRetries] times with exponential backoff on transient
   /// Firestore errors (e.g. unavailable).
   Future<bool> hasProfile({int maxRetries = 3}) async {
-    if (currentUser == null) return false;
+    // Capture a stable reference — currentUser can become null during retries
+    // if the user signs out concurrently.
+    final user = currentUser;
+    if (user == null) return false;
 
     for (int attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         final doc = await _firestore
             .collection(AppConstants.usersCollection)
-            .doc(currentUser!.uid)
+            .doc(user.uid)
             .get(const GetOptions(source: Source.server));
         return doc.exists;
       } on FirebaseException catch (e) {
