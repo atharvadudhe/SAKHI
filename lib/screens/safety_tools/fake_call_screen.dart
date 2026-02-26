@@ -29,11 +29,15 @@ class _FakeCallScreenState extends State<FakeCallScreen>
   bool _answered = false;
   Timer? _callTimer;
   int _callDurationSec = 0;
+  SystemUiOverlayStyle? _previousStyle;
 
   @override
   void initState() {
     super.initState();
     
+    // Capture current style so we can restore it in dispose
+    _previousStyle = SystemChrome.latestStyle;
+
     // Set status bar to transparent for full-screen call feel
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -115,6 +119,10 @@ class _FakeCallScreenState extends State<FakeCallScreen>
     _stopRinging();
     _callTimer?.cancel();
     _pulseController.dispose();
+    // Restore the previous system UI overlay style
+    if (_previousStyle != null) {
+      SystemChrome.setSystemUIOverlayStyle(_previousStyle!);
+    }
     super.dispose();
   }
 
@@ -156,7 +164,9 @@ class _FakeCallScreenState extends State<FakeCallScreen>
                         backgroundColor:
                             SakhiTheme.primary.withValues(alpha: 0.2),
                         child: Text(
-                          widget.callerName[0].toUpperCase(),
+                          widget.callerName.isNotEmpty
+                              ? widget.callerName[0].toUpperCase()
+                              : '?',
                           style: TextStyle(
                             fontSize: _answered ? 36 : 48,
                             fontWeight: FontWeight.bold,
