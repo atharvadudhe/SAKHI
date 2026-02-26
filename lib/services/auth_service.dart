@@ -104,10 +104,13 @@ class AuthService {
     return false; // unreachable, but satisfies return type
   }
 
-  /// Create user profile after first login
+  /// Create user profile after first login.
+  /// Times out after [timeoutSeconds] to avoid hanging when Firestore is
+  /// unreachable.
   Future<void> createProfile({
     required String name,
     required UserRole role,
+    int timeoutSeconds = 15,
   }) async {
     final user = currentUser;
     if (user == null) throw Exception('Not authenticated');
@@ -122,7 +125,15 @@ class AuthService {
     await _firestore
         .collection(AppConstants.usersCollection)
         .doc(user.uid)
-        .set(userModel.toJson());
+        .set(userModel.toJson())
+        .timeout(
+          Duration(seconds: timeoutSeconds),
+          onTimeout: () => throw Exception(
+            'Firestore is not responding. Please check your internet '
+            'connection and ensure the Firestore database has been created '
+            'in the Firebase Console.',
+          ),
+        );
   }
 
   /// Sign out
