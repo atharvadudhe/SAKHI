@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
+import '../services/platform_helper.dart';
 import '../models/user_model.dart';
 import '../widgets/animated_gradient_bg.dart';
 
@@ -51,6 +52,12 @@ class _SplashScreenState extends State<SplashScreen>
     if (!mounted) return;
 
     try {
+      // On Web/Desktop, if admin override is still active, go straight to admin.
+      if (isWebOrDesktop && AuthService.instance.isAdminOverrideActive) {
+        if (mounted) context.go('/admin');
+        return;
+      }
+
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         final hasProfile = await AuthService.instance.hasProfile();
@@ -77,7 +84,12 @@ class _SplashScreenState extends State<SplashScreen>
             context.go('/home');
         }
       } else {
-        if (mounted) context.go('/login');
+        // On Web/Desktop, go directly to email login (admin portal).
+        if (isWebOrDesktop) {
+          if (mounted) context.go('/email-login');
+        } else {
+          if (mounted) context.go('/login');
+        }
       }
     } catch (e) {
       // Firebase not configured – go to login
@@ -105,35 +117,14 @@ class _SplashScreenState extends State<SplashScreen>
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Logo ring
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: const Color(0xFFE91E63).withValues(alpha: 0.6),
-                          width: 2,
-                        ),
-                        gradient: const RadialGradient(
-                          colors: [Color(0x33E91E63), Color(0x11E91E63)],
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(
-                              0xFFE91E63,
-                            ).withValues(alpha: 0.3),
-                            blurRadius: 40,
-                            spreadRadius: 5,
-                          ),
-                        ],
-                      ),
-                      child: const Center(
-                        child: Icon(
-                          Icons.shield_rounded,
-                          size: 48,
-                          color: Color(0xFFE91E63),
-                        ),
+                    // Logo image
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: Image.asset(
+                        'assets/images/sakhi-logo-3.png',
+                        width: 120,
+                        height: 120,
+                        fit: BoxFit.cover,
                       ),
                     ),
                     const SizedBox(height: 32),
@@ -156,9 +147,19 @@ class _SplashScreenState extends State<SplashScreen>
                         ),
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'सखी',
+                      style: TextStyle(
+                        fontSize: 22,
+                        letterSpacing: 6,
+                        color: Colors.white.withValues(alpha: 0.8),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Text(
-                      'Your Trusted Companion',
+                      'Your Trusted Friend & Protector',
                       style: TextStyle(
                         fontSize: 14,
                         letterSpacing: 3,
