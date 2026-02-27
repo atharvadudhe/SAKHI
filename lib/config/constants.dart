@@ -33,6 +33,5 @@ class AppConstants {
   // ── API Keys ──
   // This value is injected at build time via dart-define or other config
   // mechanism. Do **not** hardcode your key here in source control.
-  static const String googleMapsApiKey =
-      String.fromEnvironment('GOOGLE_MAPS_API_KEY', defaultValue: '');
+  static const String googleMapsApiKey = "AIzaSyDWiIGYva-vunfRSb2jun7hx40lFESydX4";
 }
