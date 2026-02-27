@@ -79,7 +79,9 @@ class _SplashScreenState extends State<SplashScreen>
               if (mounted) context.go('/login');
             }
           case UserRole.volunteer:
-            context.go('/volunteer');
+            // Volunteer and user both land on the same home dashboard
+            // with tabs (user sees default, volunteer sees requests tab)
+            context.go('/home');
           case UserRole.user:
             context.go('/home');
         }

@@ -37,36 +37,51 @@ extension WalkingRequestService on FirestoreService {
     required String requesterId,
     required String requesterName,
     required GeoPoint requesterLocation,
+    required GeoPoint destinationLocation,
+    required String destinationName,
   }) async {
     _log('═══════════════════════════════════════════════════════════');
     _log('Creating new broadcast request');
-    _log('  requesterId: $requesterId');
-    _log('  requesterName: $requesterName');
-    _log('  location: (${requesterLocation.latitude}, ${requesterLocation.longitude})');
+    _log('  userId: $requesterId');
+    _log('  userName: $requesterName');
+    _log('  userLocation: (${requesterLocation.latitude}, ${requesterLocation.longitude})');
+    _log('  destination: $destinationName');
     _log('═══════════════════════════════════════════════════════════');
 
     try {
-      final requestId = uuid.v4();
+      final sessionId = uuid.v4();
       final now = DateTime.now();
 
       final requestData = {
-        'requestId': requestId,
-        'requesterId': requesterId,
-        'requesterName': requesterName,
-        'requesterLocation': requesterLocation,
-        'status': WalkingRequestStatus.searching.name,
-        'acceptedBy': null,
+        'sessionId': sessionId,
+        'userId': requesterId,
+        'userName': requesterName,
+        'userLocation': requesterLocation,
+        'destinationLocation': destinationLocation,
+        'destinationName': destinationName,
+        'status': 'searching',
+        'volunteerId': null,
+        'volunteerName': null,
+        'volunteerPhone': null,
+        'volunteerPhotoUrl': null,
         'createdAt': Timestamp.fromDate(now),
-        'acceptedAt': null,
+        'volunteerAcceptedAt': null,
+        'journeyStartedAt': null,
+        'destinationReachedAt': null,
+        'userConfirmedAt': null,
+        'volunteerConfirmedArrival': false,
+        'userReachedDestination': false,
+        'completedAt': null,
+        'cancelReason': null,
       };
 
-      _log('Firestore write: collection=$_walkingRequestsCollection, doc=$requestId');
-      _log('Data: $requestData');
+      _log('Firestore write: collection=$_walkingRequestsCollection, doc=$sessionId');
+      _log('Data keys: ${requestData.keys.join(", ")}');
 
-      await db.collection(_walkingRequestsCollection).doc(requestId).set(requestData);
+      await db.collection(_walkingRequestsCollection).doc(sessionId).set(requestData);
 
-      _log('✅ Request created successfully: $requestId');
-      return requestId;
+      _log('✅ Request created successfully: $sessionId');
+      return sessionId;
     } catch (e) {
       _logError('Failed to create broadcast request', e);
       rethrow;
@@ -144,21 +159,88 @@ extension WalkingRequestService on FirestoreService {
   // }
 
   Stream<List<WalkingRequestModel>> streamPendingRequestsForVolunteer() {
-  print("🔥🔥🔥 VOLUNTEER STREAM CALLED");
+    // Important debug prints that always show in console
+    print('🔥🔥🔥 VOLUNTEER STREAM CALLED');
+    print('Querying collection: $_walkingRequestsCollection where status==searching');
+    _log('═══════════════════════════════════════════════════════════');
+    _log('🎬 STREAMING PENDING REQUESTS for volunteer');
+    _log('═══════════════════════════════════════════════════════════');
 
-  return db.collection('walking_sessions').snapshots().map((snapshot) {
-    print("🔥 TOTAL DOCS IN COLLECTION: ${snapshot.docs.length}");
+    return db
+        .collection(_walkingRequestsCollection)
+        .where('status', isEqualTo: 'searching')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .handleError((error, stackTrace) {
+          _logError('Stream error in streamPendingRequestsForVolunteer', error, stackTrace);
+          throw error;
+        })
+        .map((snapshot) {
+          print('🔥 TOTAL DOCS IN COLLECTION: ${snapshot.docs.length}');
+          if (_debugStreamSnapshots) {
+            _log('📊 Stream snapshot received');
+            _log('   Connection state: ${snapshot.metadata.isFromCache ? 'CACHE' : 'SERVER'}');
+            _log('   Document count: ${snapshot.docs.length}');
+          }
 
-    for (var doc in snapshot.docs) {
-      print("🔥 DOC ID: ${doc.id}");
-      print("🔥 DOC STATUS: ${doc.data()['status']}");
+          if (snapshot.docs.isEmpty) {
+            _log('⚠️  No pending requests found');
+            return [];
+          }
+
+          try {
+            final requests = <WalkingRequestModel>[];
+
+            for (final doc in snapshot.docs) {
+              final data = doc.data();
+              if (_debugStreamSnapshots) {
+                _log('   📄 Doc: ${doc.id}');
+                _log('      status: ${data['status']}');
+                _log('      userId: ${data['userId']}');
+                _log('      userName: ${data['userName']}');
+                _log('      createdAt: ${data['createdAt']}');
+              }
+
+              try {
+                // Transform Firestore schema to WalkingRequestModel schema
+                final request = WalkingRequestModel(
+                  requestId: data['sessionId'] ?? doc.id,
+                  requesterId: data['userId'] ?? '',
+                  requesterName: data['userName'] ?? 'Unknown',
+                  requesterLocation: data['userLocation'] ?? const GeoPoint(0, 0),
+                  status: _parseStatus(data['status']),
+                  acceptedBy: data['volunteerId'],
+                  createdAt: (data['createdAt'] as Timestamp).toDate(),
+                  acceptedAt: data['volunteerAcceptedAt'] != null
+                      ? (data['volunteerAcceptedAt'] as Timestamp).toDate()
+                      : null,
+                );
+                requests.add(request);
+              } catch (e) {
+                _logError('Failed to transform document ${doc.id}', e);
+              }
+            }
+
+            _log('✅ Successfully mapped ${requests.length} requests');
+            return requests;
+          } catch (e) {
+            _logError('Failed to process snapshot', e);
+            return [];
+          }
+        });
+  }
+
+  static WalkingRequestStatus _parseStatus(String? value) {
+    switch (value) {
+      case 'accepted':
+        return WalkingRequestStatus.accepted;
+      case 'rejected':
+        return WalkingRequestStatus.rejected;
+      case 'searching':
+      default:
+        return WalkingRequestStatus.searching;
     }
-
-    return snapshot.docs
-        .map((doc) => WalkingRequestModel.fromJson(doc.data()))
-        .toList();
-  });
-}
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // DEBUG: FETCH ALL REQUESTS (No Filters)
@@ -192,16 +274,28 @@ extension WalkingRequestService on FirestoreService {
         _log('────────────────────────────────────────────────────────');
         _log('📄 Document #${i + 1}: ${doc.id}');
         _log('   Raw Data:');
-        _log('   - requestId: ${data['requestId']}');
-        _log('   - requesterId: ${data['requesterId']}');
-        _log('   - requesterName: ${data['requesterName']}');
+        _log('   - sessionId: ${data['sessionId']}');
+        _log('   - userId: ${data['userId']}');
+        _log('   - userName: ${data['userName']}');
         _log('   - status: ${data['status']}');
-        _log('   - acceptedBy: ${data['acceptedBy']}');
+        _log('   - volunteerId: ${data['volunteerId']}');
         _log('   - createdAt: ${data['createdAt']}');
-        _log('   - location: ${data['requesterLocation']}');
+        _log('   - userLocation: ${data['userLocation']}');
 
         try {
-          final request = WalkingRequestModel.fromJson(data);
+          // Transform to WalkingRequestModel
+          final request = WalkingRequestModel(
+            requestId: data['sessionId'] ?? doc.id,
+            requesterId: data['userId'] ?? '',
+            requesterName: data['userName'] ?? 'Unknown',
+            requesterLocation: data['userLocation'] ?? const GeoPoint(0, 0),
+            status: _parseStatus(data['status']),
+            acceptedBy: data['volunteerId'],
+            createdAt: (data['createdAt'] as Timestamp).toDate(),
+            acceptedAt: data['volunteerAcceptedAt'] != null
+                ? (data['volunteerAcceptedAt'] as Timestamp).toDate()
+                : null,
+          );
           requests.add(request);
           _log('   ✅ Successfully parsed');
         } catch (e) {
@@ -236,7 +330,27 @@ extension WalkingRequestService on FirestoreService {
         .map((snapshot) {
           _log('📊 DEBUG Stream: ${snapshot.docs.length} docs, cache=${snapshot.metadata.isFromCache}');
           return snapshot.docs
-              .map((doc) => WalkingRequestModel.fromJson(doc.data()))
+              .map((doc) {
+                final data = doc.data();
+                // Transform to WalkingRequestModel
+                try {
+                  return WalkingRequestModel(
+                    requestId: data['sessionId'] ?? doc.id,
+                    requesterId: data['userId'] ?? '',
+                    requesterName: data['userName'] ?? 'Unknown',
+                    requesterLocation: data['userLocation'] ?? const GeoPoint(0, 0),
+                    status: _parseStatus(data['status']),
+                    acceptedBy: data['volunteerId'],
+                    createdAt: (data['createdAt'] as Timestamp).toDate(),
+                    acceptedAt: data['volunteerAcceptedAt'] != null
+                        ? (data['volunteerAcceptedAt'] as Timestamp).toDate()
+                        : null,
+                  );
+                } catch (e) {
+                  _logError('Failed to transform doc ${doc.id}', e);
+                  rethrow;
+                }
+              })
               .toList();
         });
   }
@@ -260,7 +374,19 @@ extension WalkingRequestService on FirestoreService {
         return null;
       }
 
-      final request = WalkingRequestModel.fromJson(doc.data()!);
+      final data = doc.data()!;
+      final request = WalkingRequestModel(
+        requestId: data['sessionId'] ?? doc.id,
+        requesterId: data['userId'] ?? '',
+        requesterName: data['userName'] ?? 'Unknown',
+        requesterLocation: data['userLocation'] ?? const GeoPoint(0, 0),
+        status: _parseStatus(data['status']),
+        acceptedBy: data['volunteerId'],
+        createdAt: (data['createdAt'] as Timestamp).toDate(),
+        acceptedAt: data['volunteerAcceptedAt'] != null
+            ? (data['volunteerAcceptedAt'] as Timestamp).toDate()
+            : null,
+      );
       _log('✅ Retrieved request: ${request.requestId}');
       return request;
     } catch (e) {
@@ -277,37 +403,38 @@ extension WalkingRequestService on FirestoreService {
   /// 
   /// This ensures atomicity: only one volunteer can accept a pending request
   Future<void> acceptRequest(
-    String requestId,
+    String sessionId,
     String volunteerId,
   ) async {
     _log('═══════════════════════════════════════════════════════════');
     _log('👤 Volunteer accepting request');
-    _log('   requestId: $requestId');
+    _log('   sessionId: $sessionId');
     _log('   volunteerId: $volunteerId');
     _log('═══════════════════════════════════════════════════════════');
 
     try {
       final now = DateTime.now();
       await db.runTransaction((transaction) async {
-        final requestDoc = db.collection(_walkingRequestsCollection).doc(requestId);
+        final requestDoc = db.collection(_walkingRequestsCollection).doc(sessionId);
         final snap = await transaction.get(requestDoc);
 
         if (!snap.exists) {
-          throw Exception('Request not found: $requestId');
+          throw Exception('Request not found: $sessionId');
         }
 
-        final request = WalkingRequestModel.fromJson(snap.data() as Map<String, dynamic>);
+        final data = snap.data() as Map<String, dynamic>;
+        final status = data['status'] as String?;
 
-        if (request.status != WalkingRequestStatus.searching) {
-          throw Exception('Request already handled: status=${request.status.name}');
+        if (status != 'searching') {
+          throw Exception('Request already handled: status=$status');
         }
 
         _log('   ✅ Request is pending, updating...');
 
         transaction.update(requestDoc, {
-          'status': WalkingRequestStatus.accepted.name,
-          'acceptedBy': volunteerId,
-          'acceptedAt': Timestamp.fromDate(now),
+          'status': 'accepted',
+          'volunteerId': volunteerId,
+          'volunteerAcceptedAt': Timestamp.fromDate(now),
         });
 
         _log('   ✅ Transaction committed');
@@ -319,6 +446,22 @@ extension WalkingRequestService on FirestoreService {
       _logError('Failed to accept request', e);
       rethrow;
     }
+  }
+
+  /// Volunteer rejects a request and marks it as rejected.
+  Future<void> rejectRequest(
+    String sessionId,
+    String volunteerId, {
+    String? reason,
+    String? rejectionReason,
+  }) async {
+    final finalReason = reason ?? rejectionReason;
+    await db.collection(_walkingRequestsCollection).doc(sessionId).update({
+      'status': 'rejected',
+      'rejectedBy': volunteerId,
+      'rejectedAt': FieldValue.serverTimestamp(),
+      'rejectionReason': finalReason,
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -366,10 +509,21 @@ extension WalkingRequestService on FirestoreService {
 
           final data = doc.data()!;
           if (_debugStreamSnapshots) {
-            _log('📊 Status update: status=${data['status']}, acceptedBy=${data['acceptedBy']}');
+            _log('📊 Status update: status=${data['status']}, volunteerId=${data['volunteerId']}');
           }
 
-          return WalkingRequestModel.fromJson(data);
+          return WalkingRequestModel(
+            requestId: data['sessionId'] ?? doc.id,
+            requesterId: data['userId'] ?? '',
+            requesterName: data['userName'] ?? 'Unknown',
+            requesterLocation: data['userLocation'] ?? const GeoPoint(0, 0),
+            status: _parseStatus(data['status']),
+            acceptedBy: data['volunteerId'],
+            createdAt: (data['createdAt'] as Timestamp).toDate(),
+            acceptedAt: data['volunteerAcceptedAt'] != null
+                ? (data['volunteerAcceptedAt'] as Timestamp).toDate()
+                : null,
+          );
         });
   }
 
@@ -382,10 +536,10 @@ extension WalkingRequestService on FirestoreService {
     _log('Checking for active broadcast request: userId=$userId');
 
     try {
-      final snapshot = await db
+        final snapshot = await db
           .collection(_walkingRequestsCollection)
-          .where('requesterId', isEqualTo: userId)
-          .where('status', isEqualTo: WalkingRequestStatus.searching.name)
+          .where('userId', isEqualTo: userId)
+          .where('status', isEqualTo: 'searching')
           .get();
 
       final hasActive = snapshot.docs.isNotEmpty;
@@ -415,9 +569,9 @@ extension WalkingRequestService on FirestoreService {
     _log('🎬 streamUserOutgoingRequests called for user: $userId');
     
     return db
-        .collection(_walkingRequestsCollection)
-        .where('requesterId', isEqualTo: userId)
-        .orderBy('createdAt', descending: true)
+      .collection(_walkingRequestsCollection)
+      .where('userId', isEqualTo: userId)
+      .orderBy('createdAt', descending: true)
         .snapshots()
         .handleError((error, stackTrace) {
           _logError('Stream error in streamUserOutgoingRequests', error, stackTrace);
@@ -426,8 +580,21 @@ extension WalkingRequestService on FirestoreService {
         .map((snapshot) {
           _log('   📊 Outgoing requests stream: ${snapshot.docs.length} requests');
           return snapshot.docs
-              .map((doc) => WalkingRequestModel.fromJson(doc.data()))
-              .toList();
+              .map((doc) {
+                final data = doc.data();
+                return WalkingRequestModel(
+                  requestId: data['sessionId'] ?? doc.id,
+                  requesterId: data['userId'] ?? '',
+                  requesterName: data['userName'] ?? 'Unknown',
+                  requesterLocation: data['userLocation'] ?? const GeoPoint(0, 0),
+                  status: _parseStatus(data['status']),
+                  acceptedBy: data['volunteerId'],
+                  createdAt: (data['createdAt'] as Timestamp).toDate(),
+                  acceptedAt: data['volunteerAcceptedAt'] != null
+                      ? (data['volunteerAcceptedAt'] as Timestamp).toDate()
+                      : null,
+                );
+              }).toList();
         });
   }
 
@@ -436,11 +603,11 @@ extension WalkingRequestService on FirestoreService {
     _log('Checking for request from $userId to volunteer $volunteerId');
     
     try {
-      final snapshot = await db
+        final snapshot = await db
           .collection(_walkingRequestsCollection)
-          .where('requesterId', isEqualTo: userId)
-          .where('acceptedBy', isEqualTo: volunteerId)
-          .where('status', isEqualTo: WalkingRequestStatus.accepted.name)
+          .where('userId', isEqualTo: userId)
+          .where('volunteerId', isEqualTo: volunteerId)
+          .where('status', isEqualTo: 'accepted')
           .get();
 
       return snapshot.docs.isNotEmpty;
@@ -455,15 +622,15 @@ extension WalkingRequestService on FirestoreService {
     _log('Getting stats for volunteer: $volunteerId');
 
     try {
-      final acceptedSnapshot = await db
+        final acceptedSnapshot = await db
           .collection(_walkingRequestsCollection)
-          .where('acceptedBy', isEqualTo: volunteerId)
-          .where('status', isEqualTo: WalkingRequestStatus.accepted.name)
+          .where('volunteerId', isEqualTo: volunteerId)
+          .where('status', isEqualTo: 'accepted')
           .get();
 
-      final pendingSnapshot = await db
+        final pendingSnapshot = await db
           .collection(_walkingRequestsCollection)
-          .where('status', isEqualTo: WalkingRequestStatus.searching.name)
+          .where('status', isEqualTo: 'searching')
           .get();
 
       return {

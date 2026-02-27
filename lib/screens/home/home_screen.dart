@@ -76,6 +76,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     super.dispose();
   }
 
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _mainBody(),
+    );
+  }
+
   Future<void> _startSession() async {
     final uid = ref.read(authStateProvider).value?.uid;
     if (uid == null) {
@@ -324,23 +331,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     });
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _mainBody() {
     final userAsync = ref.watch(currentUserProvider);
     final sessionAsync = ref.watch(activeSessionProvider);
     final broadcastsAsync = ref.watch(broadcastsFeedProvider);
 
-    return Scaffold(
-      body: FadeTransition(
-        opacity: _fadeAnim,
-        child: SafeArea(
-          child: Stack(
-            children: [
-              // Main content
-              CustomScrollView(
-                slivers: [
-                  // ── App Bar ──
-                  SliverAppBar(
+    return FadeTransition(
+      opacity: _fadeAnim,
+      child: SafeArea(
+        child: Stack(
+          children: [
+            // Main content
+            CustomScrollView(
+              slivers: [
+                // ── App Bar ──
+                SliverAppBar(
                     floating: true,
                     backgroundColor: Theme.of(context).scaffoldBackgroundColor,
                     surfaceTintColor: Colors.transparent,
@@ -651,8 +656,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 }
 

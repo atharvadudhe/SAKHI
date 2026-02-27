@@ -77,6 +77,7 @@ class _ActiveWalkingSessionScreenState
 
   @override
   Widget build(BuildContext context) {
+    print('🔥 ACTIVE SCREEN: ActiveWalkingSessionScreen');
     final sessionAsync = ref.watch(walkingSessionProvider(widget.sessionId));
 
     return sessionAsync.when(

@@ -9,7 +9,10 @@ import '../../config/theme.dart';
 import '../../models/session_model.dart';
 import '../../models/user_model.dart';
 import '../../providers/providers.dart';
+import '../../providers/walking_buddy_providers.dart';
 import '../../services/location_service.dart';
+import '../../services/firestore_service.dart';
+import '../../services/walking_request_service.dart'; // for openGoogleMapsNavigation extension
 
 class VolunteerDashboardScreen extends ConsumerStatefulWidget {
   const VolunteerDashboardScreen({super.key});
@@ -63,11 +66,15 @@ class _VolunteerDashboardScreenState
               s.userLocation!.longitude,
             ),
             icon: BitmapDescriptor.defaultMarkerWithHue(
-              s.isSOS ? BitmapDescriptor.hueRed : BitmapDescriptor.hueOrange,
+              s.isSOS
+                  ? BitmapDescriptor.hueRed
+                  : s.isVirtualCompanionActive
+                      ? BitmapDescriptor.hueAzure
+                      : BitmapDescriptor.hueOrange,
             ),
             infoWindow: InfoWindow(
               title: s.isSOS ? 'SOS Alert' : 'Help Needed',
-              snippet: '${s.timeLimit}min session',
+              snippet: s.timeLimit > 0 ? '${s.timeLimit}min session' : null,
             ),
           ),
         );
@@ -89,8 +96,79 @@ class _VolunteerDashboardScreenState
     return '${km.toStringAsFixed(1)}km away';
   }
 
+  /// Accept an incoming walking-buddy request (converted to [SessionModel]).
+  Future<void> _acceptWalkingBuddy(SessionModel session) async {
+    final auth = ref.read(authStateProvider).value;
+    final user = ref.read(currentUserProvider).value;
+    if (auth == null || user == null) return;
+
+    // calculate distance from volunteer to requester
+    final distance = LocationService.instance.distanceBetween(
+      _myPosition?.latitude ?? 0,
+      _myPosition?.longitude ?? 0,
+      session.userLocation?.latitude ?? 0,
+      session.userLocation?.longitude ?? 0,
+    );
+
+    final controller = ref.read(walkingBuddyControllerProvider.notifier);
+    final success = await controller.volunteerAcceptSession(
+      sessionId: session.sessionId,
+      volunteerId: auth.uid,
+      volunteerName: user.name,
+      volunteerPhone: user.phone,
+      volunteerPhotoUrl: user.photoUrl,
+      distanceFromUser: distance,
+    );
+
+    if (success && mounted) {
+      try {
+        final pos = await LocationService.instance.getCurrentPosition();
+        if (pos != null) {
+          await FirestoreService.instance.openGoogleMapsNavigation(
+            volunteerLat: pos.latitude,
+            volunteerLng: pos.longitude,
+            userLat: session.userLocation?.latitude ?? 0,
+            userLng: session.userLocation?.longitude ?? 0,
+          );
+        }
+      } catch (e) {
+        // ignore map launch failures
+      }
+
+      // navigate to walking buddy active screen
+      context.push('/walking-buddy/volunteer-active', extra: session.sessionId);
+    }
+  }
+
+  /// Reject a walking-buddy request and dismiss it locally.
+  Future<void> _rejectWalkingBuddy(SessionModel session) async {
+    final auth = ref.read(authStateProvider).value;
+    if (auth == null) return;
+
+    final controller = ref.read(walkingBuddyControllerProvider.notifier);
+    await controller.volunteerRejectSession(
+      sessionId: session.sessionId,
+      volunteerId: auth.uid,
+      rejectionReason: null,
+    );
+
+    if (mounted) {
+      setState(() {
+        _dismissedIds.add(session.sessionId);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Request declined'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    print('🔥 ACTIVE SCREEN: VolunteerDashboardScreen');
     final userAsync = ref.watch(currentUserProvider);
     final theme = Theme.of(context);
 
@@ -349,21 +427,29 @@ class _VolunteerDashboardScreenState
                                 session: session,
                                 distanceLabel: _distanceLabel(session),
                                 onAccept: () {
-                                  ref
-                                      .read(sessionControllerProvider.notifier)
-                                      .acceptSession(session.sessionId);
+                                  if (session.isVirtualCompanionActive) {
+                                    _acceptWalkingBuddy(session);
+                                  } else {
+                                    ref
+                                        .read(sessionControllerProvider.notifier)
+                                        .acceptSession(session.sessionId);
+                                  }
                                 },
                                 onDecline: () {
-                                  setState(() {
-                                    _dismissedIds.add(session.sessionId);
-                                  });
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Request declined'),
-                                      behavior: SnackBarBehavior.floating,
-                                      duration: Duration(seconds: 1),
-                                    ),
-                                  );
+                                  if (session.isVirtualCompanionActive) {
+                                    _rejectWalkingBuddy(session);
+                                  } else {
+                                    setState(() {
+                                      _dismissedIds.add(session.sessionId);
+                                    });
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Request declined'),
+                                        behavior: SnackBarBehavior.floating,
+                                        duration: Duration(seconds: 1),
+                                      ),
+                                    );
+                                  }
                                 },
                               ),
                             );
@@ -426,7 +512,9 @@ class _SessionRequestCard extends StatelessWidget {
                       Text(
                         isSOS
                             ? 'SOS \u2014 Immediate help!'
-                            : 'Safety buddy needed',
+                            : (session.isVirtualCompanionActive
+                                ? 'Walking buddy needed'
+                                : 'Safety buddy needed'),
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,

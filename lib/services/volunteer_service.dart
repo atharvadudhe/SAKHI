@@ -517,6 +517,7 @@ import 'firestore_service.dart';
 
 Future<List<UserModel>> fetchNearbyVerifiedVolunteers(LatLng userLocation) async {
   try {
+    final db = FirebaseFirestore.instance;
     final snapshot = await db
         .collection(AppConstants.usersCollection)
         .where('role', isEqualTo: 'volunteer')

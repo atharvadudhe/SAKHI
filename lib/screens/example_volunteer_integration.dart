@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-import '../../config/constants.dart';
 import '../../models/user_model.dart';
 import '../../providers/volunteer_providers.dart';
 import '../../screens/find_volunteer_screen.dart';
@@ -24,10 +21,10 @@ class ExampleVolunteerMainScreen extends ConsumerWidget {
   final UserModel currentUser; // Get from auth + Firestore
 
   const ExampleVolunteerMainScreen({
-    Key? key,
+    super.key,
     required this.currentUserId,
     required this.currentUser,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -189,9 +186,7 @@ class ExampleVolunteerMainScreen extends ConsumerWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => VolunteerModeScreen(
-                    volunteerId: currentUserId,
-                  ),
+                  builder: (_) => const VolunteerModeScreen(),
                 ),
               );
             },
@@ -429,9 +424,7 @@ class ExampleVolunteerMainScreen extends ConsumerWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => VolunteerModeScreen(
-                          volunteerId: currentUserId,
-                        ),
+                        builder: (_) => const VolunteerModeScreen(),
                       ),
                     );
                   }

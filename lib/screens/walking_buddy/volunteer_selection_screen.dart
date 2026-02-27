@@ -58,6 +58,7 @@ class _VolunteerSelectionScreenState
 
   @override
   Widget build(BuildContext context) {
+    print('🔥 ACTIVE SCREEN: VolunteerSelectionScreen');
     return Scaffold(
       appBar: AppBar(
         title: const Text('Request in Progress'),
@@ -208,6 +209,20 @@ class _WaitingForUserConfirmScreenState
               return const Center(child: Text('Session not found'));
             }
 
+
+            // If volunteer has been accepted, navigate to buddy arriving screen
+            if (session.status == WalkingSessionStatus.volunteerAccepted) {
+              Future.microtask(() {
+                context.pushReplacement(
+                  '/walking-buddy/buddy-arriving',
+                  extra: {
+                    'sessionId': widget.sessionId,
+                    'session': session,
+                  },
+                );
+              });
+            }
+
             // If user already confirmed, navigate to active session
             if (session.status == WalkingSessionStatus.userConfirmed) {
               Future.microtask(() {
@@ -217,7 +232,6 @@ class _WaitingForUserConfirmScreenState
                 );
               });
             }
-
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(32),

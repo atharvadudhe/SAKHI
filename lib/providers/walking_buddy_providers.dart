@@ -6,14 +6,17 @@ import '../models/walking_buddy_models.dart';
 import '../services/firestore_service.dart';
 import '../services/walking_buddy_service.dart';
 import '../services/location_service.dart';
-import 'providers.dart';
 
 // ───────── Walking Session Providers ─────────
 
 /// Stream of searching walking sessions (available to volunteers)
 final searchingWalkingSessionsProvider =
     StreamProvider<List<WalkingSessionModel>>((ref) {
-  return FirestoreService.instance.getSearchingSessionsStream();
+  print('🟢 PROVIDER EXECUTED: searchingWalkingSessionsProvider');
+  return FirestoreService.instance.getSearchingSessionsStream().map((list) {
+    print('🔵 STREAMED ${list.length} searching sessions');
+    return list;
+  });
 });
 
 /// Stream of user's active walking buddy session
@@ -182,6 +185,27 @@ class WalkingBuddyController extends Notifier<AsyncValue<void>> {
     try {
       await FirestoreService.instance.volunteerConfirmArrival(sessionId);
       state = const AsyncData(null);
+      return true;
+    } catch (e, st) {
+      state = AsyncError(e, st);
+      return false;
+    }
+  }
+
+  /// Volunteer rejects/declines a session request.
+  Future<bool> volunteerRejectSession({
+    required String sessionId,
+    required String volunteerId,
+    String? rejectionReason,
+  }) async {
+    state = const AsyncLoading();
+    try {
+      await FirestoreService.instance.cancelWalkingSession(
+        sessionId,
+        rejectionReason ?? 'volunteer_rejected',
+      );
+      state = const AsyncData(null);
+      ref.invalidate(searchingWalkingSessionsProvider);
       return true;
     } catch (e, st) {
       state = AsyncError(e, st);

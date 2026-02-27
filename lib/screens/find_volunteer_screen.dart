@@ -13,7 +13,7 @@ import '../screens/user_request_listener.dart';
 /// Replaces the old volunteer listing logic after switching to a
 /// broadcast-based architecture.
 class FindVolunteerScreen extends StatefulWidget {
-  const FindVolunteerScreen({Key? key}) : super(key: key);
+  const FindVolunteerScreen({super.key});
 
   @override
   State<FindVolunteerScreen> createState() => _FindVolunteerScreenState();
@@ -93,6 +93,9 @@ class _FindVolunteerScreenState extends State<FindVolunteerScreen> {
         requesterName: profile.name,
         requesterLocation:
             GeoPoint(_userLocation!.latitude, _userLocation!.longitude),
+        destinationLocation:
+            GeoPoint(_userLocation!.latitude, _userLocation!.longitude),
+        destinationName: 'Current location',
       );
 
       Navigator.pop(context); // dismiss loader
@@ -111,6 +114,7 @@ class _FindVolunteerScreenState extends State<FindVolunteerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    print('🔥 ACTIVE SCREEN: FindVolunteerScreen');
     return Scaffold(
       appBar: AppBar(
         title: const Text('Request Walking Buddy'),

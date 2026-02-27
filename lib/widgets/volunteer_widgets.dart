@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 
 import '../models/user_model.dart';
 import '../models/walking_request_model.dart';
@@ -20,13 +19,13 @@ class VolunteerCard extends StatelessWidget {
   final Color? actionColor;
 
   const VolunteerCard({
-    Key? key,
+    super.key,
     required this.volunteer,
     required this.distanceKm,
     this.onTap,
     this.actionLabel = 'View',
     this.actionColor,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -121,12 +120,12 @@ class WalkingRequestCard extends StatelessWidget {
   final bool isLoading;
 
   const WalkingRequestCard({
-    Key? key,
+    super.key,
     required this.request,
     this.onAccept,
     this.onReject,
     this.isLoading = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -225,12 +224,12 @@ class VolunteerEmptyState extends StatelessWidget {
   final VoidCallback? onRetry;
 
   const VolunteerEmptyState({
-    Key? key,
+    super.key,
     required this.title,
     required this.subtitle,
     required this.icon,
     this.onRetry,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -275,10 +274,10 @@ class DistanceBadge extends StatelessWidget {
   final double maxRadiusKm;
 
   const DistanceBadge({
-    Key? key,
+    super.key,
     required this.distanceKm,
     required this.maxRadiusKm,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -319,9 +318,9 @@ class VolunteerAvailabilityBadge extends StatelessWidget {
   final bool isAvailable;
 
   const VolunteerAvailabilityBadge({
-    Key? key,
+    super.key,
     required this.isAvailable,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -359,9 +358,9 @@ class RequestStatusBadge extends StatelessWidget {
   final String status;
 
   const RequestStatusBadge({
-    Key? key,
+    super.key,
     required this.status,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
