@@ -494,6 +494,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               onTap: () =>
                                   context.push('/virtual-companion-setup'),
                             ),
+                            _QuickActionCard(
+                              icon: Icons.masks_rounded,
+                              title: 'Camouflage\nMode',
+                              subtitle: 'Disguise app icon',
+                              color: const Color(0xFF7B1FA2),
+                              onTap: () =>
+                                  context.push('/camouflage'),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 28),
