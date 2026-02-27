@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'config/theme.dart';
@@ -24,6 +25,8 @@ void main() async {
   // via the google‑services.json/plugin. `Firebase.apps` will be empty the
   // first time only.
   bool firebaseReady = false;
+  print('🚀 APP STARTED');
+  // USER printed after auth initialization below
   try {
     if (Firebase.apps.isEmpty) {
       if (kIsWeb) {
@@ -111,8 +114,10 @@ void main() async {
     return;
   }
 
+  print('🚀 CURRENT USER: ${FirebaseAuth.instance.currentUser?.uid}');
   runApp(const ProviderScope(child: SakhiApp()));
 }
+
 
 class SakhiApp extends StatelessWidget {
   const SakhiApp({super.key});

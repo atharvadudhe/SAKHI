@@ -7,7 +7,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../config/theme.dart';
-import '../../config/constants.dart';
 import '../../models/walking_buddy_models.dart';
 import '../../models/place_suggestion.dart';
 import '../../providers/walking_buddy_providers.dart';

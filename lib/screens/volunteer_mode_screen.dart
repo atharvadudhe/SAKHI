@@ -2,55 +2,94 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../models/walking_request_model.dart';
 import '../services/firestore_service.dart';
 import '../services/walking_request_service.dart';
+import '../providers/volunteer_providers.dart'; // <- provider for incoming requests
+import 'session/volunteer_requests_manager_screen.dart';
 import 'live_tracking_screen.dart';
 
-/// Example screen for volunteers to see incoming requests
+/// Screen that shows incoming requests to volunteers
+/// Accept/reject actions are in VolunteerRequestsManagerScreen
 /// 
 /// Features:
-/// - Real-time stream of incoming requests with full debug logging
+/// - Real-time stream of incoming requests
 /// - Only visible if volunteer.role == "volunteer" and isVerified == true
 /// - Display requester information
-/// - Accept or reject requests
+/// - Navigation to manager for actions
 /// - Real-time updates
-/// - Debug buttons to test Firestore connectivity
-class VolunteerModeScreen extends StatefulWidget {
-  final String volunteerId;
-
-  const VolunteerModeScreen({
-    Key? key,
-    required this.volunteerId,
-  }) : super(key: key);
+class VolunteerModeScreen extends ConsumerStatefulWidget {
+  const VolunteerModeScreen({super.key});
 
   @override
-  State<VolunteerModeScreen> createState() => _VolunteerModeScreenState();
+  ConsumerState<VolunteerModeScreen> createState() => _VolunteerModeScreenState();
 }
 
-class _VolunteerModeScreenState extends State<VolunteerModeScreen> {
+class _VolunteerModeScreenState extends ConsumerState<VolunteerModeScreen> {
   late FirestoreService _firestoreService;
   late Map<String, bool> _loadingStates; // Track loading per request
   LatLng? _volLocation;
   StreamSubscription<Position>? _positionSub;
   
   // Debug state
-  bool _showDebugPanel = true;
-  List<String> _debugLogs = [];
-  int _lastSnapshotCount = 0;
+  final bool _showDebugPanel = true;
+  List<String> _debugLogs = [];  
+
+  String get _volunteerId {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      _addDebugLog('⚠️ volunteerId requested but no auth user');
+      return '';
+    }
+    return uid;
+  }
 
   @override
   void initState() {
     super.initState();
+    // use singleton instance
     _firestoreService = FirestoreService.instance;
     _loadingStates = {};
-    _addDebugLog('🎬 Volunteer Mode Screen initialized');
-    _addDebugLog('Volunteer ID: ${widget.volunteerId}');
+    _addDebugLog('🛠️ initState called, volunteerId=$_volunteerId');
+
+    // initialize location (if permission granted)
     _initVolunteerLocation();
+    _startVolunteerLocationUpdates();
+    // Listen to provider events for debugging (will log lengths/errors)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          final vid = user.uid;
+          ref.listen<AsyncValue<List<WalkingRequestModel>>>(
+            incomingRequestsProvider(vid),
+            (previous, next) {
+              next.when(
+                data: (list) => _addDebugLog('📬 Provider listener: ${list.length} requests'),
+                loading: () => _addDebugLog('⏳ Provider listener: loading'),
+                error: (e, st) => _addDebugLog('❌ Provider listener error: $e'),
+              );
+            },
+          );
+        } else {
+          _addDebugLog('⚠️ Provider listener: no auth user');
+        }
+      } catch (e) {
+        _addDebugLog('⚠️ Failed to attach provider listener: $e');
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _positionSub?.cancel();
+    super.dispose();
   }
 
   void _addDebugLog(String log) {
@@ -87,118 +126,14 @@ class _VolunteerModeScreenState extends State<VolunteerModeScreen> {
         distanceFilter: 10,
       ),
     ).listen((pos) {
+      // update firestore with most recent coords
       _firestoreService.updateLiveLocation(
-          widget.volunteerId, GeoPoint(pos.latitude, pos.longitude));
+          _volunteerId, GeoPoint(pos.latitude, pos.longitude));
       _addDebugLog('📍 Location updated: ${pos.latitude}, ${pos.longitude}');
     });
   }
 
-  @override
-  void dispose() {
-    _positionSub?.cancel();
-    super.dispose();
-  }
-
-  double _toRadians(double degrees) {
-    return degrees * math.pi / 180;
-  }
-
-  double _calculateDistance(
-    double lat1,
-    double lon1,
-    double lat2,
-    double lon2,
-  ) {
-    const earthRadiusKm = 6371.0;
-    final dLat = _toRadians(lat2 - lat1);
-    final dLon = _toRadians(lon2 - lon1);
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.sin(dLon / 2) *
-            math.sin(dLon / 2) *
-            math.cos(_toRadians(lat1)) *
-            math.cos(_toRadians(lon2));
-    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-    return earthRadiusKm * c;
-  }
-
-  /// Handle accepting a walking request
-  Future<void> _handleAcceptRequest(WalkingRequestModel request) async {
-    try {
-      setState(() {
-        _loadingStates[request.requestId] = true;
-      });
-
-      _addDebugLog('👤 Accepting request from ${request.requesterName}');
-
-      await _firestoreService.acceptRequest(
-        request.requestId,
-        widget.volunteerId,
-      );
-      
-      _addDebugLog('✅ Request accepted, updating availability...');
-      await _firestoreService.setVolunteerAvailability(widget.volunteerId, false);
-
-      // start sharing our location so user can track us
-      _startVolunteerLocationUpdates();
-      _addDebugLog('📍 Started location sharing');
-
-      // attempt to open walking navigation for convenience
-      try {
-        final pos = await Geolocator.getCurrentPosition(
-            desiredAccuracy: LocationAccuracy.high);
-        _addDebugLog('🗺️ Opening navigation to user...');
-        await _firestoreService.openGoogleMapsNavigation(
-          volunteerLat: pos.latitude,
-          volunteerLng: pos.longitude,
-          userLat: request.requesterLocation.latitude,
-          userLng: request.requesterLocation.longitude,
-        );
-      } catch (e) {
-        _addDebugLog('⚠️ Navigation failed: $e');
-        print('Could not open navigation: $e');
-      }
-
-      // navigate to live tracking screen so volunteer can also monitor
-      if (mounted) {
-        _addDebugLog('🚀 Navigating to live tracking screen...');
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => LiveTrackingScreen(
-              userId: request.requesterId,
-              volunteerId: widget.volunteerId,
-            ),
-          ),
-        );
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('You accepted request from ${request.requesterName}'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      _addDebugLog('❌ Error accepting request: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error accepting request: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _loadingStates[request.requestId] = false;
-        });
-      }
-    }
-  }
+  // Accept/reject actions moved to VolunteerRequestsManagerScreen
 
   // Debug functions
   Future<void> _debugFetchAllRequests() async {
@@ -220,13 +155,27 @@ class _VolunteerModeScreenState extends State<VolunteerModeScreen> {
         elevation: 0,
         backgroundColor: Colors.purple.shade400,
         actions: [
-          IconButton(
-            icon: Icon(_showDebugPanel ? Icons.close : Icons.bug_report),
-            onPressed: () {
-              setState(() {
-                _showDebugPanel = !_showDebugPanel;
-              });
-            },
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Center(
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          const VolunteerRequestsManagerScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.check_circle_outline, size: 18),
+                label: const Text('Manage'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.purple.shade400,
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -307,87 +256,67 @@ class _VolunteerModeScreenState extends State<VolunteerModeScreen> {
   }
 
   Widget _buildBody() {
-    return StreamBuilder<List<WalkingRequestModel>>(
-      stream: _firestoreService.streamPendingRequestsForVolunteer(),
-      builder: (context, snapshot) {
-        // Log snapshot state for debugging
-        String connectionState = '';
-        switch (snapshot.connectionState) {
-          case ConnectionState.waiting:
-            connectionState = 'waiting';
-            break;
-          case ConnectionState.active:
-            connectionState = 'active';
-            break;
-          case ConnectionState.done:
-            connectionState = 'done';
-            break;
-          case ConnectionState.none:
-            connectionState = 'none';
-            break;
-        }
+    print('🔥 ACTIVE SCREEN: VolunteerModeScreen');
+    print('🟥 VOLUNTEER DASHBOARD BUILD');
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _addDebugLog('⚠️ No authenticated user');
+      return const Center(child: Text('Please log in'));
+    }
+    final volunteerId = user.uid;
+    _addDebugLog('👀 Provider watch executed build; volunteerId=$volunteerId');
 
-        // Loading state
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          _addDebugLog('⏳ Stream state: connecting...');
-          return const Center(
+    // provider watch
+    final requestsAsync = ref.watch(incomingRequestsProvider(volunteerId));
+    print('🟢 PROVIDER WATCHED for volunteerId=$volunteerId');
+
+    return requestsAsync.when(
+      loading: () {
+        _addDebugLog('⏳ Provider state: loading');
+        return const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Loading pending requests...'),
+            ],
+          ),
+        );
+      },
+      error: (error, stack) {
+        _addDebugLog('❌ Provider error: $error');
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Connecting to requests stream...'),
+                const Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: Colors.red,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Error: $error',
+                  style: const TextStyle(fontSize: 14),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _debugFetchAllRequests,
+                  child: const Text('Test Firestore Access'),
+                ),
               ],
             ),
-          );
-        }
-
-        // Error state
-        if (snapshot.hasError) {
-          _addDebugLog('❌ Stream error: ${snapshot.error}');
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.error_outline,
-                    size: 48,
-                    color: Colors.red,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Error: ${snapshot.error}',
-                    style: const TextStyle(fontSize: 14),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Connection State: $connectionState',
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: _debugFetchAllRequests,
-                    child: const Text('Test Firestore Access'),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        final requests = snapshot.data ?? [];
-
-        // Update debug log with latest snapshot
-        if (requests.length != _lastSnapshotCount) {
-          _addDebugLog('📊 Stream snapshot: ${requests.length} pending requests');
-          _lastSnapshotCount = requests.length;
-        }
-
+          ),
+        );
+      },
+      data: (requests) {
+        _addDebugLog('📊 Provider returned ${requests.length} requests');
         if (requests.isEmpty) {
-          _addDebugLog('⚠️ NO REQUESTS FOUND');
+          _addDebugLog('⚠️ NO REQUESTS FOUND (provider)');
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -430,8 +359,6 @@ class _VolunteerModeScreenState extends State<VolunteerModeScreen> {
             final request = requests[index];
             return _WalkingBuddyRequestCard(
               request: request,
-              isLoading: _loadingStates[request.requestId] ?? false,
-              onAccept: () => _handleAcceptRequest(request),
               volunteerLocation: _volLocation,
             );
           },
@@ -443,14 +370,10 @@ class _VolunteerModeScreenState extends State<VolunteerModeScreen> {
 
 class _WalkingBuddyRequestCard extends StatelessWidget {
   final WalkingRequestModel request;
-  final bool isLoading;
-  final VoidCallback onAccept;
   final LatLng? volunteerLocation;
 
   const _WalkingBuddyRequestCard({
     required this.request,
-    required this.isLoading,
-    required this.onAccept,
     this.volunteerLocation,
   });
 
@@ -546,40 +469,31 @@ class _WalkingBuddyRequestCard extends StatelessWidget {
               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
             ),
             const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: isLoading ? null : onAccept,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                ),
-                child: isLoading
-                    ? Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation(Colors.white),
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                            'Accepting...',
-                            style: TextStyle(color: Colors.white),
-                          ),
-                        ],
-                      )
-                    : const Text(
-                        'Accept Request',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: Colors.blue.shade700,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Tap button below to view & manage requests',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.blue.shade700,
                       ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

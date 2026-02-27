@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+
 import '../services/platform_helper.dart';
 import '../screens/splash_screen.dart';
 import '../screens/auth/login_screen.dart';
@@ -27,11 +28,29 @@ import '../screens/walking_buddy/location_confirmation_screen.dart';
 import '../screens/walking_buddy/volunteer_selection_screen.dart';
 import '../screens/walking_buddy/active_walking_session_screen.dart';
 import '../screens/walking_buddy/volunteer_dashboard_screen.dart';
+import '../screens/walking_buddy/buddy_arriving_screen.dart';
 import '../models/walking_buddy_models.dart';
+
+
+// Navigator observer used for tracing in production debugging
+class LoggingNavigatorObserver extends NavigatorObserver {
+  @override
+  void didPush(Route route, Route? previousRoute) {
+    super.didPush(route, previousRoute);
+    print('📍 NAVIGATION: pushed ${route.settings.name}');
+  }
+
+  @override
+  void didReplace({Route? newRoute, Route? oldRoute}) {
+    super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+    print('📍 NAVIGATION: replaced ${oldRoute?.settings.name} with ${newRoute?.settings.name}');
+  }
+}
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
   debugLogDiagnostics: true,
+  observers: [LoggingNavigatorObserver()],
   routes: [
     GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
     GoRoute(
@@ -74,6 +93,10 @@ final GoRouter appRouter = GoRouter(
       path: '/session',
       builder: (context, state) => const ActiveSessionScreen(),
     ),
+    // GoRoute(
+    //   path: '/volunteer',
+    //   builder: (context, state) => const VolunteerDashboardScreen(),
+    // ),
     GoRoute(
       path: '/volunteer',
       builder: (context, state) => const VolunteerDashboardScreen(),
@@ -211,6 +234,21 @@ final GoRouter appRouter = GoRouter(
           );
         }
         return ActiveWalkingSessionScreen(sessionId: extra);
+      },
+    ),
+    GoRoute(
+      path: '/walking-buddy/buddy-arriving',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        final sessionId = extra?['sessionId'] as String?;
+        final session = extra?['session'] as WalkingSessionModel?;
+        
+        if (sessionId == null || session == null) {
+          return const Scaffold(
+            body: Center(child: Text('No session data provided')),
+          );
+        }
+        return BuddyArrivingScreen(sessionId: sessionId, session: session);
       },
     ),
     GoRoute(

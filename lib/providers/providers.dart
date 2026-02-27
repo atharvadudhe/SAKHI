@@ -6,6 +6,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 
+// bring in walking buddy types and extension methods used below
+import '../models/walking_buddy_models.dart';
+import '../services/walking_buddy_service.dart';
+import 'package:rxdart/rxdart.dart';
+
+// We need Rx.combineLatest when merging safety sessions with walking buddy requests.
+
 import '../models/user_model.dart';
 import '../models/session_model.dart';
 import '../models/emergency_contact.dart';
@@ -60,9 +67,46 @@ final activeSessionProvider = StreamProvider<SessionModel?>((ref) {
   return FirestoreService.instance.activeSessionStream(user.uid);
 });
 
-/// Stream of sessions searching for volunteers
+/// Convert a [WalkingSessionModel] into a generic [SessionModel] so
+/// the volunteer dashboard can display both safety and walking-buddy
+/// requests in the same list. The resulting session uses
+/// [isVirtualCompanionActive] to mark it as a walking-buddy request.
+SessionModel _sessionFromWalking(WalkingSessionModel w) {
+  return SessionModel(
+    sessionId: w.sessionId,
+    createdBy: w.userId,
+    status: SessionStatus.searching,
+    startTime: w.createdAt,
+    lastUpdate: w.createdAt,
+    userLocation: w.userLocation,
+    destinationLocation: w.destinationLocation,
+    timeLimit: w.estimatedDuration.round(),
+    isVirtualCompanionActive: true,
+  );
+}
+
+/// Stream of sessions searching for volunteers.  This provider now merges
+/// two sources:
+///  1. traditional `sessions` collection (safety feature)
+///  2. walking buddy requests from `walking_sessions`.
+///
+/// The lists are combined on every update so the UI receives a unified
+/// list containing both types of requests.
 final searchingSessionsProvider = StreamProvider<List<SessionModel>>((ref) {
-  return FirestoreService.instance.searchingSessionsStream();
+  final safetyStream = FirestoreService.instance.searchingSessionsStream();
+  final buddyStream = FirestoreService.instance
+      .getSearchingSessionsStream()
+      .map((list) => list.map(_sessionFromWalking).toList());
+
+  return Rx.combineLatest2<List<SessionModel>, List<SessionModel>,
+      List<SessionModel>>(safetyStream, buddyStream, (safety, buddies) {
+    // simply concatenate then sort by startTime descending so newest
+    // sessions appear first.  This keeps behavior consistent regardless of
+    // which stream emitted the update.
+    final combined = [...safety, ...buddies];
+    combined.sort((a, b) => b.startTime.compareTo(a.startTime));
+    return combined;
+  });
 });
 
 // ───────── Session Controller ─────────

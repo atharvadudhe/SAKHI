@@ -64,6 +64,8 @@ final nearbyVolunteerCountProvider =
 /// Stream incoming requests for a volunteer
 final incomingRequestsProvider =
     StreamProvider.family<List<WalkingRequestModel>, String>((ref, volunteerId) {
+  // debug log when provider is created/watched
+  print('🟢 PROVIDER EXECUTED: incomingRequestsProvider volunteerId=$volunteerId');
   final firestoreService = FirestoreService.instance;
   return firestoreService.streamIncomingRequests(volunteerId);
 });

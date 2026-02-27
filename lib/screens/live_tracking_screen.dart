@@ -14,10 +14,10 @@ class LiveTrackingScreen extends StatefulWidget {
   final String volunteerId;
 
   const LiveTrackingScreen({
-    Key? key,
+    super.key,
     required this.userId,
     required this.volunteerId,
-  }) : super(key: key);
+  });
 
   @override
   _LiveTrackingScreenState createState() => _LiveTrackingScreenState();

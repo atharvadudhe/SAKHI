@@ -88,7 +88,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       if (mounted) {
         switch (_selectedRole) {
           case UserRole.volunteer:
-            context.go('/volunteer');
+            context.go('/walking-buddy/volunteer-dashboard');
           case UserRole.admin:
           case UserRole.user:
             context.go('/home');

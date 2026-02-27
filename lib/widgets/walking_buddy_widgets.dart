@@ -9,11 +9,11 @@ class WalkingSessionCard extends StatelessWidget {
   final bool isCompact;
 
   const WalkingSessionCard({
-    Key? key,
+    super.key,
     required this.session,
     required this.onTap,
     this.isCompact = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -178,12 +178,12 @@ class VolunteerCard extends StatelessWidget {
   final bool isLoading;
 
   const VolunteerCard({
-    Key? key,
+    super.key,
     required this.volunteer,
     required this.onAccept,
     this.onCall,
     this.isLoading = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -323,13 +323,13 @@ class SwipeActionButton extends StatefulWidget {
   final IconData icon;
 
   const SwipeActionButton({
-    Key? key,
+    super.key,
     required this.label,
     this.backgroundColor = SakhiTheme.primary,
     this.textColor = Colors.white,
     required this.onSwipeComplete,
     required this.icon,
-  }) : super(key: key);
+  });
 
   @override
   State<SwipeActionButton> createState() => _SwipeActionButtonState();
@@ -457,10 +457,10 @@ class DraggableSOSButton extends StatefulWidget {
   final bool isVisible;
 
   const DraggableSOSButton({
-    Key? key,
+    super.key,
     required this.onSOS,
     this.isVisible = true,
-  }) : super(key: key);
+  });
 
   @override
   State<DraggableSOSButton> createState() => _DraggableSOSButtonState();
@@ -526,10 +526,10 @@ class LocationPinWidget extends StatelessWidget {
   final Color color;
 
   const LocationPinWidget({
-    Key? key,
+    super.key,
     required this.label,
     this.color = SakhiTheme.primary,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -566,9 +566,9 @@ class NoVolunteersWidget extends StatelessWidget {
   final VoidCallback onRetry;
 
   const NoVolunteersWidget({
-    Key? key,
+    super.key,
     required this.onRetry,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

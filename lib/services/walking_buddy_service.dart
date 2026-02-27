@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:uuid/uuid.dart';
 
 import '../models/walking_buddy_models.dart';
 import 'firestore_service.dart';
@@ -27,7 +26,7 @@ extension WalkingBuddyService on FirestoreService {
     required String? destinationAddress,
     required double estimatedDuration,
   }) async {
-    final sessionId = this.uuid.v4();
+    final sessionId = uuid.v4();
     final now = DateTime.now();
 
     await db.collection(_sessionsCollection).doc(sessionId).set({
@@ -309,7 +308,7 @@ extension WalkingBuddyService on FirestoreService {
     required String userId,
     required Position position,
   }) async {
-    final locationId = this.uuid.v4();
+    final locationId = uuid.v4();
 
     await db
         .collection(_sessionsCollection)
