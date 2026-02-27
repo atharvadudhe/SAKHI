@@ -1,0 +1,26 @@
+# Flutter
+.build/
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Mac
+.DS_Store
+
+# VSCode
+.vscode/
+
+# Firebase Functions
+functions/node_modules/
+functions/.firebase/
+functions/lib/
+functions/.runtimeconfig.json
+functions/.env
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
