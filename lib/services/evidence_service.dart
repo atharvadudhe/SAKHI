@@ -23,6 +23,11 @@ class EvidenceService {
 
   bool _isRecording = false;
   String? _filePath;
+  String? _currentSessionId;
+  DateTime? _recordingStartTime;
+
+  /// Whitelist pattern for session IDs: alphanumeric, dash, underscore.
+  static final RegExp _safeSessionIdPattern = RegExp(r'^[a-zA-Z0-9_-]+$');
 
   /// Whether a recording is in progress.
   bool get isRecording => _isRecording;
@@ -33,7 +38,21 @@ class EvidenceService {
   /// successfully. Silently returns `false` on permission denial or
   /// unsupported platforms to avoid blocking the SOS flow.
   Future<bool> startCovertRecording(String sessionId) async {
-    if (_isRecording) return true; // already recording
+    if (_isRecording) {
+      // Already recording — check if it's the same session
+      if (_currentSessionId == sessionId) return true;
+      debugPrint(
+        '[EvidenceService] Recording active for session $_currentSessionId, '
+        'but requested for $sessionId. Returning false.',
+      );
+      return false;
+    }
+
+    // Validate sessionId to prevent path traversal / injection
+    if (sessionId.isEmpty || !_safeSessionIdPattern.hasMatch(sessionId)) {
+      debugPrint('[EvidenceService] Invalid sessionId: $sessionId');
+      return false;
+    }
 
     try {
       final hasPermission = await _recorder.hasPermission();
@@ -56,6 +75,8 @@ class EvidenceService {
       );
 
       _isRecording = true;
+      _currentSessionId = sessionId;
+      _recordingStartTime = DateTime.now();
       debugPrint('[EvidenceService] Recording started for session $sessionId');
       return true;
     } catch (e) {
@@ -72,6 +93,12 @@ class EvidenceService {
   /// Returns the SHA-256 hex digest on success, or `null` on failure.
   Future<String?> stopAndUploadEvidence(String sessionId) async {
     if (!_isRecording) return null;
+
+    // Validate sessionId
+    if (sessionId.isEmpty || !_safeSessionIdPattern.hasMatch(sessionId)) {
+      debugPrint('[EvidenceService] Invalid sessionId for upload: $sessionId');
+      return null;
+    }
 
     try {
       final path = await _recorder.stop();
@@ -112,12 +139,15 @@ class EvidenceService {
       final snapshot = await uploadTask;
       final downloadUrl = await snapshot.ref.getDownloadURL();
 
+      // Use the actual recording start time if available.
+      final recordedAt = _recordingStartTime ?? DateTime.now();
+
       // Persist metadata in Firestore.
       await FirestoreService.instance.saveSessionEvidence(
         sessionId: sessionId,
         downloadUrl: downloadUrl,
         sha256Hash: hashHex,
-        recordedAt: DateTime.now(),
+        recordedAt: recordedAt,
       );
 
       debugPrint(
@@ -129,10 +159,23 @@ class EvidenceService {
         if (!kIsWeb) File(path).deleteSync();
       } catch (_) {}
 
+      _currentSessionId = null;
+      _recordingStartTime = null;
+      _filePath = null;
       return hashHex;
     } catch (e) {
       debugPrint('[EvidenceService] Stop/upload failed: $e');
       _isRecording = false;
+      // Clean up local temp file on failure
+      try {
+        if (!kIsWeb && _filePath != null && _filePath!.isNotEmpty) {
+          final file = File(_filePath!);
+          if (file.existsSync()) file.deleteSync();
+        }
+      } catch (_) {}
+      _currentSessionId = null;
+      _recordingStartTime = null;
+      _filePath = null;
       return null;
     }
   }
@@ -143,7 +186,17 @@ class EvidenceService {
     try {
       await _recorder.stop();
     } catch (_) {}
+    // Clean up the temp file
+    try {
+      if (!kIsWeb && _filePath != null && _filePath!.isNotEmpty) {
+        final file = File(_filePath!);
+        if (file.existsSync()) file.deleteSync();
+      }
+    } catch (_) {}
+    _filePath = null;
     _isRecording = false;
+    _currentSessionId = null;
+    _recordingStartTime = null;
   }
 
   /// Dispose the recorder when the app shuts down.
@@ -156,7 +209,7 @@ class EvidenceService {
 
   Future<String> _buildFilePath(String sessionId) async {
     if (kIsWeb) return '';
-    // Use system temp directory.
+    // sessionId is already validated by _safeSessionIdPattern before this call.
     final dir = Directory.systemTemp;
     return '${dir.path}/sakhi_evidence_$sessionId.m4a';
   }

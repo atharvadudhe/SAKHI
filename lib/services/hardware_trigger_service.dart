@@ -24,6 +24,7 @@ class HardwareTriggerService {
   StreamSubscription<double>? _volumeSub;
   bool _isInitialized = false;
   bool _isCooldown = false;
+  Timer? _cooldownTimer;
 
   /// Number of rapid presses required to trigger SOS.
   static const int _requiredPresses = 3;
@@ -73,7 +74,8 @@ class HardwareTriggerService {
 
   void _activateCooldown() {
     _isCooldown = true;
-    Future.delayed(_cooldownDuration, () => _isCooldown = false);
+    _cooldownTimer?.cancel();
+    _cooldownTimer = Timer(_cooldownDuration, () => _isCooldown = false);
   }
 
   // ────────────────────────────────────────────────────────────────────────
@@ -102,24 +104,30 @@ class HardwareTriggerService {
           location: geoPoint,
         );
 
-        // 2. Begin continuous location sharing
+        // 2. Begin continuous location sharing — guard against stale uid
         LocationService.instance.startLocationUpdates(
           onUpdate: (pos) {
+            final currentUser = FirebaseAuth.instance.currentUser;
+            if (currentUser == null) {
+              // User signed out — stop location updates
+              LocationService.instance.stopLocationUpdates();
+              return;
+            }
             final point = GeoPoint(pos.latitude, pos.longitude);
-            FirestoreService.instance.updateUserLocation(user.uid, point);
+            FirestoreService.instance.updateUserLocation(currentUser.uid, point);
           },
         );
 
         debugPrint('[HardwareTrigger] SOS broadcast sent successfully');
+
+        // 3. Notify the UI layer only after successful SOS send
+        onSOSTriggered?.call();
       } else {
         debugPrint('[HardwareTrigger] Could not acquire location');
       }
     } catch (e, st) {
       debugPrint('[HardwareTrigger] Error triggering SOS: $e\n$st');
     }
-
-    // 3. Notify the UI layer
-    onSOSTriggered?.call();
   }
 
   // ────────────────────────────────────────────────────────────────────────
@@ -128,6 +136,8 @@ class HardwareTriggerService {
   void dispose() {
     _volumeSub?.cancel();
     _volumeSub = null;
+    _cooldownTimer?.cancel();
+    _cooldownTimer = null;
     _isInitialized = false;
     _pressTimestamps.clear();
   }

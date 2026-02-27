@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 
@@ -12,6 +13,7 @@ import '../../models/live_location_model.dart';
 import '../../providers/providers.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
+import 'widgets/pending_volunteers_list.dart';
 
 /// Admin dashboard — web-only.
 class AdminDashboardScreen extends ConsumerStatefulWidget {
@@ -31,21 +33,31 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     _NavItem(icon: Icons.map_rounded, label: 'Map'),
     _NavItem(icon: Icons.warning_rounded, label: 'Live Alerts'),
     _NavItem(icon: Icons.people_rounded, label: 'Users'),
+    _NavItem(icon: Icons.verified_user_rounded, label: 'Verification'),
   ];
 
   @override
   Widget build(BuildContext context) {
-    // Security: web-only + admin role
-    if (!kIsWeb) {
+    // Security: web/desktop-only + admin role
+    if (!kIsWeb &&
+        defaultTargetPlatform != TargetPlatform.windows &&
+        defaultTargetPlatform != TargetPlatform.macOS &&
+        defaultTargetPlatform != TargetPlatform.linux) {
       return const Scaffold(
         body: Center(
-          child: Text('Admin panel is only available on the web platform.'),
+          child: Text('Admin panel is only available on Desktop/Web.'),
         ),
       );
     }
 
+    // On Web/Desktop, allow access if admin override is active (hardcoded
+    // credentials were validated). Otherwise fall back to Firestore role check.
+    final isAdminOverride = AuthService.instance.isAdminOverrideActive;
     final currentUser = ref.watch(currentUserProvider).value;
-    if (currentUser == null || currentUser.role != UserRole.admin) {
+    final hasAccess = isAdminOverride ||
+        (currentUser != null && currentUser.role == UserRole.admin);
+
+    if (!hasAccess) {
       return Scaffold(
         body: Center(
           child: Column(
@@ -66,7 +78,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
               const Text('You do not have admin privileges.'),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: () => AuthService.instance.signOut(),
+                onPressed: () async {
+                  await AuthService.instance.signOut();
+                  if (context.mounted) context.go('/login');
+                },
                 child: const Text('Sign Out'),
               ),
             ],
@@ -168,7 +183,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: OutlinedButton.icon(
-                    onPressed: () => AuthService.instance.signOut(),
+                    onPressed: () async {
+                      await AuthService.instance.signOut();
+                      if (context.mounted) context.go('/login');
+                    },
                     icon: const Icon(Icons.logout_rounded, size: 18),
                     label: const Text('Sign Out'),
                     style: OutlinedButton.styleFrom(
@@ -188,6 +206,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 ),
               1 => const _LiveAlertsTab(),
               2 => const _UserManagementTab(),
+              3 => const PendingVolunteersList(),
               _ => const SizedBox.shrink(),
             },
           ),
@@ -264,6 +283,9 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
     final trackedUids = trackers.map((t) => t.uid).toSet();
     for (final s in sessions) {
       if (s.isSOS && s.userLocation != null && !trackedUids.contains(s.createdBy)) {
+        final safeId = s.sessionId.length >= 8
+            ? s.sessionId.substring(0, 8)
+            : s.sessionId;
         markers.add(
           Marker(
             markerId: MarkerId('sos_session_${s.sessionId}'),
@@ -275,7 +297,7 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
                 BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
             infoWindow: InfoWindow(
               title: 'SOS (session)',
-              snippet: 'Session ${s.sessionId.substring(0, 8)}',
+              snippet: 'Session $safeId',
             ),
           ),
         );
@@ -464,10 +486,12 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
     final users = usersAsync.value ?? [];
     final markers = _buildMarkers(trackers, sessions);
 
-    // Stats
+    // Stats — deduplicate SOS count so sessions whose user is already
+    // in the trackers list are not double-counted.
+    final trackedUids = trackers.map((t) => t.uid).toSet();
     final sosCount =
         trackers.where((t) => t.trackingReason == TrackingReason.sos).length +
-            sessions.where((s) => s.isSOS).length;
+            sessions.where((s) => s.isSOS && !trackedUids.contains(s.createdBy)).length;
     final volunteerCount =
         trackers.where((t) => t.role == 'volunteer').length;
     final sessionUserCount =

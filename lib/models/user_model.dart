@@ -19,8 +19,14 @@ class UserModel {
   final String? safePin;
   final String? duressPin;
 
+  // ── Profile picture ──
+  final String? photoUrl;
+
   // ── KYC verification ──
   final VerificationStatus verificationStatus;
+  final String? idFrontUrl;
+  final String? idBackUrl;
+  final DateTime? verificationSubmittedAt;
 
   const UserModel({
     required this.uid,
@@ -33,7 +39,11 @@ class UserModel {
     this.verifiedStatus = false,
     this.safePin,
     this.duressPin,
+    this.photoUrl,
     this.verificationStatus = VerificationStatus.unverified,
+    this.idFrontUrl,
+    this.idBackUrl,
+    this.verificationSubmittedAt,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -50,9 +60,15 @@ class UserModel {
       verifiedStatus: json['verifiedStatus'] as bool? ?? false,
       safePin: json['safePin'] as String?,
       duressPin: json['duressPin'] as String?,
+      photoUrl: json['photoUrl'] as String?,
       verificationStatus: _parseVerificationStatus(
         json['verificationStatus'] as String?,
       ),
+      idFrontUrl: json['idFrontUrl'] as String?,
+      idBackUrl: json['idBackUrl'] as String?,
+      verificationSubmittedAt: json['verificationSubmittedAt'] != null
+          ? (json['verificationSubmittedAt'] as Timestamp).toDate()
+          : null,
     );
   }
 
@@ -69,7 +85,13 @@ class UserModel {
     'verifiedStatus': verifiedStatus,
     'safePin': safePin,
     'duressPin': duressPin,
+    'photoUrl': photoUrl,
     'verificationStatus': verificationStatus.name,
+    'idFrontUrl': idFrontUrl,
+    'idBackUrl': idBackUrl,
+    'verificationSubmittedAt': verificationSubmittedAt != null
+        ? Timestamp.fromDate(verificationSubmittedAt!)
+        : null,
   };
 
   static UserRole _parseRole(String? value) {
@@ -107,7 +129,13 @@ class UserModel {
     bool? verifiedStatus,
     String? safePin,
     String? duressPin,
+    String? photoUrl,
     VerificationStatus? verificationStatus,
+    String? idFrontUrl,
+    String? idBackUrl,
+    DateTime? verificationSubmittedAt,
+    bool clearSafePin = false,
+    bool clearDuressPin = false,
   }) {
     return UserModel(
       uid: uid ?? this.uid,
@@ -118,16 +146,25 @@ class UserModel {
       currentLocation: currentLocation ?? this.currentLocation,
       lastHeartbeat: lastHeartbeat ?? this.lastHeartbeat,
       verifiedStatus: verifiedStatus ?? this.verifiedStatus,
-      safePin: safePin ?? this.safePin,
-      duressPin: duressPin ?? this.duressPin,
+      safePin: clearSafePin ? null : (safePin ?? this.safePin),
+      duressPin: clearDuressPin ? null : (duressPin ?? this.duressPin),
+      photoUrl: photoUrl ?? this.photoUrl,
       verificationStatus: verificationStatus ?? this.verificationStatus,
+      idFrontUrl: idFrontUrl ?? this.idFrontUrl,
+      idBackUrl: idBackUrl ?? this.idBackUrl,
+      verificationSubmittedAt: verificationSubmittedAt ?? this.verificationSubmittedAt,
     );
   }
 
   /// Whether the user has configured both PINs for duress cancellation.
-  bool get hasDuressPinSetup =>
-      safePin != null &&
-      safePin!.length == 4 &&
-      duressPin != null &&
-      duressPin!.length == 4;
+  /// Requires both PINs to be non-null, exactly 4 digits, numeric-only,
+  /// and different from each other.
+  bool get hasDuressPinSetup {
+    final digitPattern = RegExp(r'^\d{4}$');
+    return safePin != null &&
+        digitPattern.hasMatch(safePin!) &&
+        duressPin != null &&
+        digitPattern.hasMatch(duressPin!) &&
+        safePin != duressPin;
+  }
 }

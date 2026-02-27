@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -30,6 +31,8 @@ class _VolunteerVerificationScreenState
   XFile? _idBack;
   bool _uploading = false;
   double _uploadProgress = 0;
+  bool _isResubmitting = false;
+  StreamSubscription<TaskSnapshot>? _uploadSubscription;
 
   Future<void> _pickImage({required bool isFront}) async {
     final file = await _picker.pickImage(
@@ -55,10 +58,12 @@ class _VolunteerVerificationScreenState
       final bytes = await file.readAsBytes();
       task = storageRef.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
     } else {
-      task = storageRef.putFile(File(file.path));
+      final bytes = await file.readAsBytes();
+      task = storageRef.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
     }
 
-    task.snapshotEvents.listen((snap) {
+    _uploadSubscription?.cancel();
+    _uploadSubscription = task.snapshotEvents.listen((snap) {
       if (mounted) {
         setState(() {
           _uploadProgress =
@@ -116,9 +121,10 @@ class _VolunteerVerificationScreenState
       );
     } catch (e) {
       if (!mounted) return;
+      debugPrint('Volunteer verification error: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $e'),
+          content: Text('Something went wrong. Please try again.'),
           behavior: SnackBarBehavior.floating,
           backgroundColor: SakhiTheme.danger,
         ),
@@ -126,6 +132,13 @@ class _VolunteerVerificationScreenState
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
+  }
+
+  @override
+  void dispose() {
+    _uploadSubscription?.cancel();
+    _uploadSubscription = null;
+    super.dispose();
   }
 
   @override
@@ -167,7 +180,7 @@ class _VolunteerVerificationScreenState
                     'Thank you for helping keep our community safe!',
               );
             }
-            if (user.verificationStatus == VerificationStatus.rejected) {
+            if (user.verificationStatus == VerificationStatus.rejected && !_isResubmitting) {
               return _buildStatusView(
                 theme,
                 icon: Icons.block_rounded,
@@ -180,7 +193,7 @@ class _VolunteerVerificationScreenState
               );
             }
 
-            // Unverified — show upload UI.
+            // Unverified (or resubmitting after rejection) — show upload UI.
             return _buildUploadForm(theme);
           },
         ),
@@ -223,7 +236,7 @@ class _VolunteerVerificationScreenState
             if (showResubmit) ...[
               const SizedBox(height: 24),
               OutlinedButton.icon(
-                onPressed: () => setState(() {}), // forces rebuild to show form
+                onPressed: () => setState(() => _isResubmitting = true),
                 icon: const Icon(Icons.refresh_rounded),
                 label: const Text('Re-submit Documents'),
               ),
@@ -398,7 +411,15 @@ class _VolunteerVerificationScreenState
                 borderRadius: BorderRadius.circular(14),
                 child: kIsWeb
                     ? Image.network(file.path, fit: BoxFit.cover)
-                    : Image.file(File(file.path), fit: BoxFit.cover),
+                    : FutureBuilder<Uint8List>(
+                        future: file.readAsBytes(),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData) {
+                            return Image.memory(snapshot.data!, fit: BoxFit.cover);
+                          }
+                          return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+                        },
+                      ),
               )
             : Column(
                 mainAxisAlignment: MainAxisAlignment.center,

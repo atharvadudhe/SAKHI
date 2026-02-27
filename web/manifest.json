@@ -1,11 +1,11 @@
 {
-    "name": "sakhi",
-    "short_name": "sakhi",
+    "name": "Sakhi",
+    "short_name": "Sakhi",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#2D1B69",
+    "theme_color": "#2D1B69",
+    "description": "Sakhi - Women's Safety & Care App",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

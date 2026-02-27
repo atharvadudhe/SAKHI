@@ -61,7 +61,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     // Wire hardware-trigger SOS to the same SOS handler used by the button
     HardwareTriggerService.instance.onSOSTriggered = () {
-      if (mounted) _showHardwareSOSConfirmation();
+      if (mounted) {
+        _triggerSOS();
+        _showHardwareSOSConfirmation();
+      }
     };
   }
 
@@ -109,8 +112,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           .read(sessionControllerProvider.notifier)
           .triggerSOS(session.sessionId);
 
-      // Start covert evidence recording (non-blocking).
-      EvidenceService.instance.startCovertRecording(session.sessionId);
+      // Start covert evidence recording — await and handle errors.
+      try {
+        final started = await EvidenceService.instance.startCovertRecording(session.sessionId);
+        if (!started && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Covert recording could not start. Check microphone permissions.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint('Covert recording failed: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Covert recording failed to start.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
     }
 
     // 2. Also send an SOS broadcast to nearby volunteers
@@ -470,6 +493,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               color: SakhiTheme.connected,
                               onTap: () =>
                                   context.push('/virtual-companion-setup'),
+                            ),
+                            _QuickActionCard(
+                              icon: Icons.masks_rounded,
+                              title: 'Camouflage\nMode',
+                              subtitle: 'Disguise app icon',
+                              color: const Color(0xFF7B1FA2),
+                              onTap: () =>
+                                  context.push('/camouflage'),
                             ),
                           ],
                         ),

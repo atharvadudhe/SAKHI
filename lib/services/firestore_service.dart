@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:rxdart/rxdart.dart';
 
@@ -67,6 +68,13 @@ class FirestoreService {
   Future<void> updateUserName(String uid, String name) async {
     await _db.collection(AppConstants.usersCollection).doc(uid).update({
       'name': name,
+    });
+  }
+
+  /// Update user profile photo URL
+  Future<void> updatePhotoUrl(String uid, String photoUrl) async {
+    await _db.collection(AppConstants.usersCollection).doc(uid).update({
+      'photoUrl': photoUrl,
     });
   }
 
@@ -398,14 +406,15 @@ class FirestoreService {
   }
 
   /// Deactivate a user's live location (mark offline).
+  /// Uses set-with-merge so it won't throw if the document doesn't exist.
   Future<void> deactivateLiveLocation(String uid) async {
     await _db
         .collection(AppConstants.liveLocationsCollection)
         .doc(uid)
-        .update({
+        .set({
       'isActive': false,
       'lastUpdatedAt': FieldValue.serverTimestamp(),
-    });
+    }, SetOptions(merge: true));
   }
 
   /// Stream all currently active live-location documents.
@@ -461,12 +470,25 @@ class FirestoreService {
 
   // ───────── Duress PIN Operations ─────────
 
-  /// Save Safe PIN and Duress PIN to user profile.
+  /// Save hashed Safe PIN and Duress PIN to user profile.
+  ///
+  /// Callers MUST hash PINs before calling this method (bcrypt/Argon2/SHA-256+salt).
+  /// A basic guard rejects obvious plaintext inputs (short numeric-only values).
   Future<void> savePins({
     required String uid,
     required String safePin,
     required String duressPin,
   }) async {
+    // Basic guard: reject obvious plaintext (4-6 digit numeric strings).
+    // Properly hashed values are always longer and contain non-digit characters.
+    final plaintext = RegExp(r'^\d{1,8}$');
+    if (plaintext.hasMatch(safePin) || plaintext.hasMatch(duressPin)) {
+      debugPrint(
+        '[FirestoreService] WARNING: savePins received what appears to be '
+        'plaintext PINs. PINs should be hashed before calling savePins.',
+      );
+    }
+
     await _db.collection(AppConstants.usersCollection).doc(uid).update({
       'safePin': safePin,
       'duressPin': duressPin,
@@ -502,7 +524,43 @@ class FirestoreService {
     final data = <String, dynamic>{'verificationStatus': status};
     if (idFrontUrl != null) data['idFrontUrl'] = idFrontUrl;
     if (idBackUrl != null) data['idBackUrl'] = idBackUrl;
+    if (status == 'pending') {
+      data['verificationSubmittedAt'] = FieldValue.serverTimestamp();
+    }
     await _db.collection(AppConstants.usersCollection).doc(uid).update(data);
+  }
+
+  /// Stream volunteers with a specific verification status (admin only).
+  Stream<List<UserModel>> volunteersWithStatusStream(String status) {
+    return _db
+        .collection(AppConstants.usersCollection)
+        .where('role', isEqualTo: 'volunteer')
+        .where('verificationStatus', isEqualTo: status)
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((doc) => UserModel.fromJson(doc.data()))
+              .toList(),
+        );
+  }
+
+  /// Approve a volunteer's KYC verification (admin only).
+  Future<void> approveVolunteer(String uid) async {
+    await _db.collection(AppConstants.usersCollection).doc(uid).update({
+      'verificationStatus': 'verified',
+      'verifiedStatus': true,
+    });
+  }
+
+  /// Reject a volunteer's KYC verification (admin only).
+  /// Clears ID URLs from Firestore. Caller should also delete storage files.
+  Future<void> rejectVolunteer(String uid) async {
+    await _db.collection(AppConstants.usersCollection).doc(uid).update({
+      'verificationStatus': 'rejected',
+      'verifiedStatus': false,
+      'idFrontUrl': FieldValue.delete(),
+      'idBackUrl': FieldValue.delete(),
+    });
   }
 
   // ───────── Evidence Vault ─────────

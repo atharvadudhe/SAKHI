@@ -59,6 +59,75 @@
 	<array>
 		<string>location</string>
 	</array>
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key>
+			<array>
+				<string>AppIcon</string>
+			</array>
+			<key>UIPrerenderedIcon</key>
+			<true/>
+		</dict>
+		<key>CFBundleAlternateIcons</key>
+		<dict>
+			<key>calculator</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>calculator</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
+			<key>calendar</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>calendar</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
+			<key>notes</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>notes</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
+			<key>lotus</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>lotus</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
+			<key>sakhi</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>sakhi</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
+			<key>sakhi_hindi</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>sakhi_hindi</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

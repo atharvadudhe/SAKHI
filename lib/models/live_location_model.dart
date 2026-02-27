@@ -54,12 +54,28 @@ class LiveLocationModel {
       parsedTs = DateTime.now();
     }
 
+    final uid = json['uid'] as String? ?? '';
+    final latitude = (json['latitude'] as num?)?.toDouble();
+    final longitude = (json['longitude'] as num?)?.toDouble();
+
+    if (uid.isEmpty) {
+      throw FormatException(
+        'LiveLocationModel.fromJson: "uid" is required and cannot be empty.',
+      );
+    }
+    if (latitude == null || longitude == null) {
+      throw FormatException(
+        'LiveLocationModel.fromJson: "latitude" and "longitude" are required '
+        'for uid "$uid".',
+      );
+    }
+
     return LiveLocationModel(
-      uid: json['uid'] as String? ?? '',
+      uid: uid,
       userName: json['userName'] as String? ?? 'Unknown',
       role: json['role'] as String? ?? 'user',
-      latitude: (json['latitude'] as num?)?.toDouble() ?? 0.0,
-      longitude: (json['longitude'] as num?)?.toDouble() ?? 0.0,
+      latitude: latitude,
+      longitude: longitude,
       lastUpdatedAt: parsedTs,
       isActive: json['isActive'] as bool? ?? true,
       trackingReason: _parseReason(json['trackingReason'] as String?),
@@ -95,6 +111,8 @@ class LiveLocationModel {
         'batteryLevel': batteryLevel,
       };
 
+  static const Object _sentinel = Object();
+
   LiveLocationModel copyWith({
     String? uid,
     String? userName,
@@ -104,8 +122,8 @@ class LiveLocationModel {
     DateTime? lastUpdatedAt,
     bool? isActive,
     TrackingReason? trackingReason,
-    String? sessionId,
-    int? batteryLevel,
+    Object? sessionId = _sentinel,
+    Object? batteryLevel = _sentinel,
   }) {
     return LiveLocationModel(
       uid: uid ?? this.uid,
@@ -116,8 +134,12 @@ class LiveLocationModel {
       lastUpdatedAt: lastUpdatedAt ?? this.lastUpdatedAt,
       isActive: isActive ?? this.isActive,
       trackingReason: trackingReason ?? this.trackingReason,
-      sessionId: sessionId ?? this.sessionId,
-      batteryLevel: batteryLevel ?? this.batteryLevel,
+      sessionId: identical(sessionId, _sentinel)
+          ? this.sessionId
+          : sessionId as String?,
+      batteryLevel: identical(batteryLevel, _sentinel)
+          ? this.batteryLevel
+          : batteryLevel as int?,
     );
   }
 
@@ -135,7 +157,8 @@ class LiveLocationModel {
 
   /// Human-readable elapsed time since last update.
   String get timeSinceUpdate {
-    final diff = DateTime.now().difference(lastUpdatedAt);
+    final rawDiff = DateTime.now().difference(lastUpdatedAt);
+    final diff = rawDiff.isNegative ? Duration.zero : rawDiff;
     if (diff.inSeconds < 10) return 'Just now';
     if (diff.inSeconds < 60) return '${diff.inSeconds}s ago';
     if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';

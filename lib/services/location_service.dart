@@ -249,12 +249,16 @@ class LocationService {
           sessionId: sessionId,
         );
 
-        FirestoreService.instance.upsertLiveLocation(loc);
+        FirestoreService.instance.upsertLiveLocation(loc).catchError(
+          (e) => debugPrint('[LocationService] upsertLiveLocation failed: $e'),
+        );
 
         // Also keep the user document in sync (existing behaviour)
         FirestoreService.instance.updateUserLocation(
           userId,
           GeoPoint(pos.latitude, pos.longitude),
+        ).catchError(
+          (e) => debugPrint('[LocationService] updateUserLocation failed: $e'),
         );
       },
       onError: (e) => debugPrint('Live tracking stream error: $e'),

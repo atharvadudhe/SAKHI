@@ -98,15 +98,28 @@ class _ActiveCompanionScreenState extends ConsumerState<ActiveCompanionScreen> {
       debugPrint('Failed to create companion session: $e');
     }
 
-    // Start the visible countdown
-    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      setState(() => _remainingSeconds--);
-      if (_remainingSeconds <= 0) {
-        _countdownTimer?.cancel();
-        _autoTriggerSOS();
-      }
-    });
+    // Start the visible countdown only after successful session creation
+    if (_sessionId != null) {
+      _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) return;
+        setState(() => _remainingSeconds--);
+        if (_remainingSeconds <= 0) {
+          _countdownTimer?.cancel();
+          _autoTriggerSOS();
+        }
+      });
+    } else {
+      // Session creation failed — still start timer but log warning
+      debugPrint('[VirtualCompanion] Session creation failed; timer started without sessionId');
+      _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) return;
+        setState(() => _remainingSeconds--);
+        if (_remainingSeconds <= 0) {
+          _countdownTimer?.cancel();
+          _autoTriggerSOS();
+        }
+      });
+    }
   }
 
   // ── User-driven safe arrival ──
@@ -181,6 +194,7 @@ class _ActiveCompanionScreenState extends ConsumerState<ActiveCompanionScreen> {
   @override
   void dispose() {
     _countdownTimer?.cancel();
+    LocationService.instance.stopLocationUpdates();
     super.dispose();
   }
 

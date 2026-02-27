@@ -116,8 +116,14 @@ class SessionController extends Notifier<AsyncValue<void>> {
     try {
       // Stop and upload evidence if recording was active.
       if (EvidenceService.instance.isRecording) {
-        // Fire-and-forget — don't block session end.
-        EvidenceService.instance.stopAndUploadEvidence(sessionId);
+        // Fire-and-forget — don't block session end, but log errors.
+        EvidenceService.instance
+            .stopAndUploadEvidence(sessionId)
+            .then((_) => debugPrint('[SessionController] Evidence uploaded for $sessionId'))
+            .catchError((e) {
+          debugPrint('[SessionController] Evidence upload failed for $sessionId: $e');
+          // TODO: enqueue for retry if a retry manager is available
+        });
       }
       await FirestoreService.instance.endSession(sessionId);
       _stopTracking();
@@ -131,8 +137,12 @@ class SessionController extends Notifier<AsyncValue<void>> {
   Future<void> triggerSOS(String sessionId) async {
     try {
       await FirestoreService.instance.triggerSOS(sessionId);
-      // Start covert evidence recording (non-blocking, best-effort).
-      EvidenceService.instance.startCovertRecording(sessionId);
+      // Start covert evidence recording (best-effort, log failures).
+      try {
+        await EvidenceService.instance.startCovertRecording(sessionId);
+      } catch (e) {
+        debugPrint('[SessionController] Covert recording failed for $sessionId: $e');
+      }
     } catch (e) {
       // SOS should never silently fail
       rethrow;
@@ -233,9 +243,11 @@ class SessionController extends Notifier<AsyncValue<void>> {
     _heartbeatTimer = null;
     LocationService.instance.stopLocationUpdates();
 
-    // Also stop live tracking
+    // Also stop live tracking (guard against null uid on logout)
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    LocationService.instance.stopLiveTracking(userId: uid);
+    if (uid != null) {
+      LocationService.instance.stopLiveTracking(userId: uid);
+    }
   }
 }
 
@@ -271,6 +283,11 @@ final allUsersProvider = StreamProvider<List<UserModel>>((ref) {
 /// Stream of all active sessions (admin)
 final allActiveSessionsProvider = StreamProvider<List<SessionModel>>((ref) {
   return FirestoreService.instance.allActiveSessionsStream();
+});
+
+/// Stream of volunteers with pending verification (admin)
+final pendingVolunteersProvider = StreamProvider<List<UserModel>>((ref) {
+  return FirestoreService.instance.volunteersWithStatusStream('pending');
 });
 
 // ───────── Live Location Providers ─────────
