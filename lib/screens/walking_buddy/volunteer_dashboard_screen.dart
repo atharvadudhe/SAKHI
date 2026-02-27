@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
+import '../../services/firestore_service.dart';
+import '../../services/walking_request_service.dart';
 import 'dart:math' as math;
 
 import '../../config/theme.dart';
@@ -148,6 +151,20 @@ class _VolunteerDashboardWalkingBuddyScreenState extends ConsumerState<Volunteer
       );
 
       if (success && mounted) {
+        // open external Google Maps navigation from volunteer -> user
+        try {
+          final pos = await Geolocator.getCurrentPosition(
+              desiredAccuracy: LocationAccuracy.high);
+          await FirestoreService.instance.openGoogleMapsNavigation(
+            volunteerLat: pos.latitude,
+            volunteerLng: pos.longitude,
+            userLat: session.userLocation.latitude,
+            userLng: session.userLocation.longitude,
+          );
+        } catch (e) {
+          print('Could not launch navigation: $e');
+        }
+
         context.push(
           '/walking-buddy/volunteer-active',
           extra: session.sessionId,

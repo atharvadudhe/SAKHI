@@ -41,21 +41,44 @@ void main() async {
       Firebase.app();
     }
 
-    // ── Local Emulator (only in debug builds) ────────────────────────────
-    // To use emulators, uncomment the block below and run:
-    //   firebase emulators:start
-    // For physical devices, pass your LAN IP:
-    //   flutter run --dart-define=EMULATOR_HOST=192.168.x.x
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FIRESTORE EMULATOR SETUP FOR BROADCAST WALKING BUDDY DEBUGGING
+    // ═══════════════════════════════════════════════════════════════════════════
     //
-    // if (kDebugMode) {
-    //   const String host = String.fromEnvironment(
-    //     'EMULATOR_HOST',
-    //     defaultValue: kIsWeb ? 'localhost' : '10.0.2.2',
-    //   );
-    //   await FirebaseAuth.instance.useAuthEmulator(host, 9099);
-    //   FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
-    // }
-    // ─────────────────────────────────────────────────────────────────────
+    // IMPORTANT: Both emulators (user & volunteer) MUST use the same emulator
+    // for proper broadcast testing.
+    //
+    // ENABLE EMULATORS IN DEBUG MODE:
+    // ───────────────────────────────────────────────────────────────────────
+    // 1. Uncomment the block below
+    // 2. Run: firebase emulators:start --project=YOUR_PROJECT_ID
+    // 3. Run both emulators with: flutter run --dart-define=EMULATOR_NEW=true
+    //
+    // FOR MULTIPLE DEVICES (LAN):
+    // ───────────────────────────────────────────────────────────────────────
+    // 1. Start emulator on host machine: firebase emulators:start
+    // 2. Find your machine's LAN IP: ifconfig | grep inet
+    // 3. Run on device: flutter run --dart-define=EMULATOR_HOST=192.168.x.x
+    //
+    // DEBUGGING BROADCAST REQUESTS:
+    // ───────────────────────────────────────────────────────────────────────
+    // - User emulator: creates request → should see "Waiting for volunteer..."
+    // - Volunteer emulator: enables "Volunteer Mode" → should see request
+    // - Both must be authenticated with DIFFERENT Firebase Auth accounts
+    // - Both must be using SAME Firebase project/emulator
+    // - Check Firestore debugger: should see walkingRequests collection
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    if (kDebugMode) {
+      // UNCOMMENT TO ENABLE EMULATOR
+      // const String host = String.fromEnvironment(
+      //   'EMULATOR_HOST',
+      //   defaultValue: kIsWeb ? 'localhost' : '10.0.2.2',
+      // );
+      // print('🔥 USING FIREBASE EMULATOR: $host');
+      // await FirebaseAuth.instance.useAuthEmulator(host, 9099);
+      // FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
+    }
 
     // Initialize push notifications
     await NotificationService.instance.initialize();
@@ -70,7 +93,7 @@ void main() async {
   } catch (e, st) {
     debugPrint('Firebase init error: $e\n$st');
   }
-
+  print(Firebase.app().options.projectId);
   if (!firebaseReady) {
     // Show a minimal error app so users aren't left on a blank screen
     runApp(

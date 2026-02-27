@@ -54,6 +54,13 @@ class FirestoreService {
     });
   }
 
+  /// Update live location field (e.g. during active request)
+  Future<void> updateLiveLocation(String uid, GeoPoint location) async {
+    await _db.collection(AppConstants.usersCollection).doc(uid).update({
+      'liveLocation': location,
+    });
+  }
+
   /// Update heartbeat timestamp
   Future<void> updateHeartbeat(String uid) async {
     await _db.collection(AppConstants.usersCollection).doc(uid).update({
