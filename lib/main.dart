@@ -19,12 +19,27 @@ void main() async {
     await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   }
 
-  // Initialize Firebase
+  // Initialize Firebase. guard against duplicate initialization which can occur
+  // when hot‑restarting in debug or when Firebase auto‑initialises on mobile
+  // via the google‑services.json/plugin. `Firebase.apps` will be empty the
+  // first time only.
   bool firebaseReady = false;
   try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
+    if (Firebase.apps.isEmpty) {
+      if (kIsWeb) {
+        // Web requires explicit options from generated file
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        );
+      } else {
+        // Native platforms pick up configuration from google-services.json
+        // / GoogleService-Info.plist automatically, so a plain call is enough.
+        await Firebase.initializeApp();
+      }
+    } else {
+      // already initialised (hot restart or prior call), just retrieve it
+      Firebase.app();
+    }
 
     // ── Local Emulator (only in debug builds) ────────────────────────────
     // To use emulators, uncomment the block below and run:
