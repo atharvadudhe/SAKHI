@@ -22,6 +22,12 @@ import '../screens/safety_tools/active_companion_screen.dart';
 import '../screens/safety_tools/pin_setup_screen.dart';
 import '../screens/safety_tools/camouflage_screen.dart';
 import '../screens/profile/volunteer_verification_screen.dart';
+import '../screens/walking_buddy/destination_search_screen.dart';
+import '../screens/walking_buddy/location_confirmation_screen.dart';
+import '../screens/walking_buddy/volunteer_selection_screen.dart';
+import '../screens/walking_buddy/active_walking_session_screen.dart';
+import '../screens/walking_buddy/volunteer_dashboard_screen.dart';
+import '../models/walking_buddy_models.dart';
 
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
@@ -152,6 +158,76 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/camouflage',
       builder: (context, state) => const CamouflageScreen(),
+    ),
+
+    // ──────── Walking Buddy Routes ────────
+    GoRoute(
+      path: '/walking-buddy/search-destination',
+      builder: (context, state) => const DestinationSearchScreen(),
+    ),
+    GoRoute(
+      path: '/walking-buddy/location-confirmation',
+      builder: (context, state) {
+        final extra = state.extra as DestinationModel?;
+        if (extra == null) {
+          return const Scaffold(
+            body: Center(child: Text('No destination provided')),
+          );
+        }
+        return LocationConfirmationScreen(destination: extra);
+      },
+    ),
+    GoRoute(
+      path: '/walking-buddy/volunteer-selection',
+      builder: (context, state) {
+        final extra = state.extra as String?;
+        if (extra == null) {
+          return const Scaffold(
+            body: Center(child: Text('No session ID provided')),
+          );
+        }
+        return VolunteerSelectionScreen(sessionId: extra);
+      },
+    ),
+    GoRoute(
+      path: '/walking-buddy/waiting-for-user-confirm',
+      builder: (context, state) {
+        final extra = state.extra as String?;
+        if (extra == null) {
+          return const Scaffold(
+            body: Center(child: Text('No session ID provided')),
+          );
+        }
+        return WaitingForUserConfirmScreen(sessionId: extra);
+      },
+    ),
+    GoRoute(
+      path: '/walking-buddy/active-session',
+      builder: (context, state) {
+        final extra = state.extra as String?;
+        if (extra == null) {
+          return const Scaffold(
+            body: Center(child: Text('No session ID provided')),
+          );
+        }
+        return ActiveWalkingSessionScreen(sessionId: extra);
+      },
+    ),
+    GoRoute(
+      path: '/walking-buddy/volunteer-dashboard',
+      builder: (context, state) => const VolunteerDashboardWalkingBuddyScreen(),
+    ),
+    GoRoute(
+      path: '/walking-buddy/volunteer-active',
+      builder: (context, state) {
+        final extra = state.extra as String?;
+        if (extra == null) {
+          return const Scaffold(
+            body: Center(child: Text('No session ID provided')),
+          );
+        }
+        return VolunteerActiveSessionScreen(sessionId: extra);
+      },
     ),
   ],
 );

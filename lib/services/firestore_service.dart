@@ -18,6 +18,10 @@ class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final _uuid = const Uuid();
 
+  // Getters to allow extensions to access the database and uuid
+  FirebaseFirestore get db => _db;
+  Uuid get uuid => _uuid;
+
   // ───────── User Operations ─────────
 
   /// Stream the current user's profile

@@ -502,6 +502,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               onTap: () =>
                                   context.push('/camouflage'),
                             ),
+                            _QuickActionCard(
+                              icon: Icons.people_rounded,
+                              title: 'Walking\nBuddy',
+                              subtitle: 'Find a buddy',
+                              color: Colors.teal,
+                              onTap: () =>
+                                  context.push('/walking-buddy/search-destination'),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 28),
@@ -776,6 +784,7 @@ class _QuickActionCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
                 width: 40,
@@ -786,30 +795,34 @@ class _QuickActionCard extends StatelessWidget {
                 ),
                 child: Icon(icon, color: color, size: 22),
               ),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+              const SizedBox(height: 8),
+              Flexible(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                  color:
-                      Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.color?.withValues(alpha: 0.8) ??
-                      Colors.black54,
+              Flexible(
+                child: Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    color:
+                        Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.color?.withValues(alpha: 0.8) ??
+                        Colors.black54,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

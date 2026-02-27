@@ -50,6 +50,7 @@ dependencies:
   record: ^6.2.0
   crypto: ^3.0.6
   shared_preferences: ^2.3.4
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:

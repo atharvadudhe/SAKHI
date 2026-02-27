@@ -29,4 +29,10 @@ class AppConstants {
   // ── Live Tracking Settings ──
   static const int liveTrackingIntervalSec = 10;
   static const int liveTrackingDistanceFilterM = 15;
+
+  // ── API Keys ──
+  // This value is injected at build time via dart-define or other config
+  // mechanism. Do **not** hardcode your key here in source control.
+  static const String googleMapsApiKey =
+      String.fromEnvironment('GOOGLE_MAPS_API_KEY', defaultValue: '');
 }
