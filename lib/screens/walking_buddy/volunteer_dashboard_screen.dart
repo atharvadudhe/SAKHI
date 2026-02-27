@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 import 'dart:math' as math;
 
 import '../../config/theme.dart';
@@ -484,13 +485,7 @@ class _VolunteerActiveSessionScreenState
                         ),
                         IconButton(
                           icon: const Icon(Icons.call),
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Calling user...'),
-                              ),
-                            );
-                          },
+                          onPressed: () => _callUser(context, session),
                         ),
                       ],
                     ),
@@ -539,6 +534,37 @@ class _VolunteerActiveSessionScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Arrival confirmed! Waiting for user...'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _callUser(
+    BuildContext context,
+    WalkingSessionModel session,
+  ) async {
+    final phone = session.userPhone.trim().isEmpty
+        ? '1234567890'
+        : session.userPhone.trim();
+
+    final normalized = phone.replaceAll(RegExp(r'[^\d+]'), '');
+    if (normalized.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invalid user phone number'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final uri = 'tel:$normalized';
+    final launched = await launchUrlString(uri);
+    if (!launched && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open phone dialer'),
           behavior: SnackBarBehavior.floating,
         ),
       );
