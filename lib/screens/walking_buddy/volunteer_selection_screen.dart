@@ -72,7 +72,9 @@ class _VolunteerSelectionScreenState
       ),
       body: Consumer(
         builder: (context, ref, _) {
-          final sessionAsync = ref.watch(walkingSessionProvider(widget.sessionId));
+          final sessionAsync = ref.watch(
+            walkingSessionStreamProvider(widget.sessionId),
+          );
           return sessionAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (err, st) => Center(child: Text('Error: $err')),
@@ -176,7 +178,9 @@ class _WaitingForUserConfirmScreenState
 
   @override
   Widget build(BuildContext context) {
-    final sessionAsync = ref.watch(walkingSessionProvider(widget.sessionId));
+    final sessionAsync = ref.watch(
+      walkingSessionStreamProvider(widget.sessionId),
+    );
 
     return WillPopScope(
       onWillPop: () async {
@@ -296,7 +300,7 @@ class _WaitingForUserConfirmScreenState
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Waiting for volunteer to be accepted...',
+                              'Volunteer accepted. Please confirm to continue...',
                               style:
                                   Theme.of(context).textTheme.bodyMedium,
                             ),

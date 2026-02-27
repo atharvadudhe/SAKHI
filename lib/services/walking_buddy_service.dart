@@ -69,6 +69,16 @@ extension WalkingBuddyService on FirestoreService {
     return WalkingSessionModel.fromJson(doc.data()!);
   }
 
+  /// Stream a walking session by ID for real-time status updates.
+  Stream<WalkingSessionModel?> getWalkingSessionStream(String sessionId) {
+    return db.collection(_sessionsCollection).doc(sessionId).snapshots().map((
+      doc,
+    ) {
+      if (!doc.exists) return null;
+      return WalkingSessionModel.fromJson(doc.data()!);
+    });
+  }
+
   /// Stream active walking sessions (searching for volunteers)
   Stream<List<WalkingSessionModel>> getSearchingSessionsStream() {
     return db

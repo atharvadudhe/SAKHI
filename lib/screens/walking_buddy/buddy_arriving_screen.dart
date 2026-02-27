@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../config/theme.dart';
 import '../../models/walking_buddy_models.dart';
+import '../../providers/walking_buddy_providers.dart';
 
 /// Simple screen shown to the user after a volunteer accepts the request.
 class BuddyArrivingScreen extends ConsumerWidget {
@@ -59,17 +60,41 @@ class BuddyArrivingScreen extends ConsumerWidget {
               Text(
                 'They will reach your location shortly. You will be notified when they arrive.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
               ),
               const SizedBox(height: 28),
               ElevatedButton.icon(
+                onPressed: () async {
+                  final success = await ref
+                      .read(walkingBuddyControllerProvider.notifier)
+                      .userConfirmVolunteer(sessionId);
+
+                  if (!context.mounted) return;
+                  if (success) {
+                    context.push('/walking-buddy/active-session', extra: sessionId);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Could not confirm volunteer. Please try again.'),
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.check_circle_outline_rounded),
+                label: const Text('Accept Volunteer'),
+                style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
                 onPressed: () {
-                  // Navigate to live session if available
                   context.push('/walking-buddy/active-session', extra: sessionId);
                 },
                 icon: const Icon(Icons.map_rounded),
                 label: const Text('View Live Tracking'),
-                style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
+                style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(52)),
               ),
               const SizedBox(height: 12),
               TextButton(
@@ -86,5 +111,3 @@ class BuddyArrivingScreen extends ConsumerWidget {
     );
   }
 }
-
-

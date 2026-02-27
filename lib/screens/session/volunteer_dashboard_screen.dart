@@ -11,8 +11,6 @@ import '../../models/user_model.dart';
 import '../../providers/providers.dart';
 import '../../providers/walking_buddy_providers.dart';
 import '../../services/location_service.dart';
-import '../../services/firestore_service.dart';
-import '../../services/walking_request_service.dart'; // for openGoogleMapsNavigation extension
 
 class VolunteerDashboardScreen extends ConsumerStatefulWidget {
   const VolunteerDashboardScreen({super.key});
@@ -121,21 +119,8 @@ class _VolunteerDashboardScreenState
     );
 
     if (success && mounted) {
-      try {
-        final pos = await LocationService.instance.getCurrentPosition();
-        if (pos != null) {
-          await FirestoreService.instance.openGoogleMapsNavigation(
-            volunteerLat: pos.latitude,
-            volunteerLng: pos.longitude,
-            userLat: session.userLocation?.latitude ?? 0,
-            userLng: session.userLocation?.longitude ?? 0,
-          );
-        }
-      } catch (e) {
-        // ignore map launch failures
-      }
-
-      // navigate to walking buddy active screen
+      // navigate to walking buddy active screen.
+      // Google Maps navigation will be launched only after user confirmation.
       context.push('/walking-buddy/volunteer-active', extra: session.sessionId);
     }
   }
