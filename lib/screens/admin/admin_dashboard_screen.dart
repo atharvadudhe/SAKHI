@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:intl/intl.dart';
 
@@ -37,17 +38,26 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Security: web-only + admin role
-    if (!kIsWeb) {
+    // Security: web/desktop-only + admin role
+    if (!kIsWeb &&
+        defaultTargetPlatform != TargetPlatform.windows &&
+        defaultTargetPlatform != TargetPlatform.macOS &&
+        defaultTargetPlatform != TargetPlatform.linux) {
       return const Scaffold(
         body: Center(
-          child: Text('Admin panel is only available on the web platform.'),
+          child: Text('Admin panel is only available on Desktop/Web.'),
         ),
       );
     }
 
+    // On Web/Desktop, allow access if admin override is active (hardcoded
+    // credentials were validated). Otherwise fall back to Firestore role check.
+    final isAdminOverride = AuthService.instance.isAdminOverrideActive;
     final currentUser = ref.watch(currentUserProvider).value;
-    if (currentUser == null || currentUser.role != UserRole.admin) {
+    final hasAccess = isAdminOverride ||
+        (currentUser != null && currentUser.role == UserRole.admin);
+
+    if (!hasAccess) {
       return Scaffold(
         body: Center(
           child: Column(
@@ -68,7 +78,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
               const Text('You do not have admin privileges.'),
               const SizedBox(height: 24),
               ElevatedButton(
-                onPressed: () => AuthService.instance.signOut(),
+                onPressed: () async {
+                  await AuthService.instance.signOut();
+                  if (context.mounted) context.go('/login');
+                },
                 child: const Text('Sign Out'),
               ),
             ],
@@ -170,7 +183,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: OutlinedButton.icon(
-                    onPressed: () => AuthService.instance.signOut(),
+                    onPressed: () async {
+                      await AuthService.instance.signOut();
+                      if (context.mounted) context.go('/login');
+                    },
                     icon: const Icon(Icons.logout_rounded, size: 18),
                     label: const Text('Sign Out'),
                     style: OutlinedButton.styleFrom(
