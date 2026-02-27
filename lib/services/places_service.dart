@@ -21,38 +21,50 @@ class PlacesService {
   /// ideally persisted while the user is typing. See Google docs for usage
   /// with billing.
   static Future<List<PlaceSuggestion>> fetchSuggestions(
-      String input, String sessionToken) async {
-    final apiKey = AppConstants.googleMapsApiKey;
-    if (apiKey.isEmpty) {
-      throw Exception('Google Maps API key not provided');
-    }
-
-    final uri = Uri.parse('$_baseUrl/autocomplete/json').replace(
-      queryParameters: {
-        'input': input,
-        'key': apiKey,
-        'sessiontoken': sessionToken,
-        'components': 'country:in',
-      },
-    );
-
-    final resp = await http.get(uri);
-    if (resp.statusCode != 200) {
-      throw Exception('Places autocomplete request failed with code ${resp.statusCode}');
-    }
-
-    final data = json.decode(resp.body) as Map<String, dynamic>;
-    final status = data['status'] as String?;
-    if (status != 'OK') {
-      if (status == 'ZERO_RESULTS') return [];
-      throw Exception('Places API error: $status');
-    }
-
-    final List suggestionsJson = data['predictions'] as List;
-    return suggestionsJson
-        .map((item) => PlaceSuggestion.fromJson(item as Map<String, dynamic>))
-        .toList();
+    String input, String sessionToken) async {
+  final apiKey = AppConstants.googleMapsApiKey;
+  if (apiKey.isEmpty) {
+    throw Exception('Google Maps API key not provided');
   }
+
+  final uri = Uri.parse('$_baseUrl/autocomplete/json').replace(
+    queryParameters: {
+      'input': input,
+      'key': apiKey,
+      'sessiontoken': sessionToken,
+      'components': 'country:in',
+    },
+  );
+
+  print("==== AUTOCOMPLETE REQUEST ====");
+  print("URI: $uri");
+
+  final resp = await http.get(uri);
+
+  print("STATUS CODE: ${resp.statusCode}");
+  print("RESPONSE BODY: ${resp.body}");
+  print("==============================");
+
+  if (resp.statusCode != 200) {
+    throw Exception(
+        'Places autocomplete request failed with code ${resp.statusCode}');
+  }
+
+  final data = json.decode(resp.body) as Map<String, dynamic>;
+  final status = data['status'] as String?;
+
+  if (status != 'OK') {
+    if (status == 'ZERO_RESULTS') return [];
+    throw Exception(
+        'Places API error: $status - ${data['error_message']}');
+  }
+
+  final List suggestionsJson = data['predictions'] as List;
+  return suggestionsJson
+      .map((item) =>
+          PlaceSuggestion.fromJson(item as Map<String, dynamic>))
+      .toList();
+}
 
   /// Retrieves the latitude/longitude of a place given its [placeId].
   ///

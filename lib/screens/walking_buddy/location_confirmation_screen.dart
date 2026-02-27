@@ -404,19 +404,50 @@ class _LocationConfirmationScreenState
             // map occupies as much space as possible but will shrink if
             // bottom sheet grows
             Expanded(
-              child: GoogleMap(
-                initialCameraPosition: CameraPosition(
-                  target: _userLocation!,
-                  zoom: 15,
-                ),
-                onMapCreated: (controller) {
-                  if (!_mapController.isCompleted) {
-                    _mapController.complete(controller);
-                  }
-                },
-                markers: _markers,
+  child: Stack(
+    children: [
+      GoogleMap(
+        initialCameraPosition: CameraPosition(
+          target: _userLocation!,
+          zoom: 15,
+        ),
+
+        onMapCreated: (controller) {
+          if (!_mapController.isCompleted) {
+            _mapController.complete(controller);
+          }
+        },
+
+        // 🔥 This updates location when map moves
+        onCameraMove: (cameraPosition) {
+          setState(() {
+            _userLocation = cameraPosition.target;
+          });
+        },
+
+        markers: {
+          if (_destinationLocation != null)
+            Marker(
+              markerId: const MarkerId('destination'),
+              position: _destinationLocation!,
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                BitmapDescriptor.hueRed,
               ),
             ),
+        },
+      ),
+
+      // 🔥 CENTER FIXED PIN (Uber Style)
+      const Center(
+        child: Icon(
+          Icons.location_pin,
+          size: 45,
+          color: Colors.blue,
+        ),
+      ),
+    ],
+  ),
+),
             // bottom sheet: flexible so it can scroll when space is low
             Flexible(
               fit: FlexFit.loose,
