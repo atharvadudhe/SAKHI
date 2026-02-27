@@ -97,5 +97,30 @@ service cloud.firestore {
                     );
       allow delete: if isAdmin();
     }
+
+    // ── Walking Requests Collection (Broadcast Model) ──
+    match /walkingRequests/{requestId} {
+      // Authenticated users (volunteers) can read ALL pending requests
+      // Filters (role, verificationStatus, isAvailable) are done on client-side
+      allow read: if isAuthenticated();
+      
+      // Authenticated users can create requests (users creating walking buddy requests)
+      allow create: if isAuthenticated()
+                    && request.resource.data.requesterId == request.auth.uid;
+      
+      // Requesters can update their own requests, volunteers can update accepted requests
+      allow update: if isAuthenticated()
+                    && (
+                      resource.data.requesterId == request.auth.uid
+                      || (
+                        resource.data.status == 'pending'
+                        && request.resource.data.status == 'accepted'
+                        && request.resource.data.acceptedBy == request.auth.uid
+                      )
+                    );
+      
+      // Only admins can delete
+      allow delete: if isAdmin();
+    }
   }
 }

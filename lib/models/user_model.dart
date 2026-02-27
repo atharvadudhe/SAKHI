@@ -12,6 +12,7 @@ class UserModel {
   final UserRole role;
   final bool isAvailable;
   final GeoPoint? currentLocation;
+  final GeoPoint? liveLocation;
   final DateTime? lastHeartbeat;
   final bool verifiedStatus;
 
@@ -35,6 +36,7 @@ class UserModel {
     this.role = UserRole.user,
     this.isAvailable = false,
     this.currentLocation,
+    this.liveLocation,
     this.lastHeartbeat,
     this.verifiedStatus = false,
     this.safePin,
@@ -54,6 +56,7 @@ class UserModel {
       role: _parseRole(json['role'] as String?),
       isAvailable: json['isAvailable'] as bool? ?? false,
       currentLocation: json['currentLocation'] as GeoPoint?,
+      liveLocation: json['liveLocation'] as GeoPoint?,
       lastHeartbeat: json['lastHeartbeat'] != null
           ? (json['lastHeartbeat'] as Timestamp).toDate()
           : null,

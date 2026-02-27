@@ -5,10 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../config/theme.dart';
 import '../../models/walking_buddy_models.dart';
 import '../../providers/walking_buddy_providers.dart';
-import '../../providers/providers.dart';
-import '../../services/firestore_service.dart';
-import '../../services/walking_buddy_service.dart';
-import '../../widgets/walking_buddy_widgets.dart';
 
 /// Screen for selecting a volunteer from nearby available volunteers
 class VolunteerSelectionScreen extends ConsumerStatefulWidget {
@@ -26,179 +22,88 @@ class VolunteerSelectionScreen extends ConsumerStatefulWidget {
 
 class _VolunteerSelectionScreenState
     extends ConsumerState<VolunteerSelectionScreen> {
-  final ScrollController _scrollController = ScrollController();
+
+  Future<void> _cancelSession(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel request?'),
+        content: const Text(
+            'Are you sure you want to cancel the walking buddy request?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final controller = ref.read(walkingBuddyControllerProvider.notifier);
+      await controller.cancelWalkingSession(widget.sessionId, 'User cancelled');
+      if (mounted) context.go('/home');
+    }
+  }
 
   @override
   void dispose() {
-    _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _selectVolunteer(VolunteerAvailabilityModel volunteer) async {
-    // TODO: Implement volunteer call functionality
-    // For now, just show a snackbar
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Calling ${volunteer.volunteerName}...'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  Future<void> _acceptVolunteer(VolunteerAvailabilityModel volunteer) async {
-    try {
-      final controller = ref.read(walkingBuddyControllerProvider.notifier);
-      final success = await controller.volunteerAcceptSession(
-        sessionId: widget.sessionId,
-        volunteerId: volunteer.volunteerId,
-        volunteerName: volunteer.volunteerName,
-        volunteerPhone: volunteer.phone,
-        volunteerPhotoUrl: volunteer.photoUrl,
-        distanceFromUser: volunteer.distanceFromUser,
-      );
-
-      if (success && mounted) {
-        // Navigate to waiting screen
-        context.pushReplacement(
-          '/walking-buddy/waiting-for-user-confirm',
-          extra: widget.sessionId,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Select a Volunteer'),
-        centerTitle: true,
+        title: const Text('Request in Progress'),
+        automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => _cancelSession(context),
+          ),
+        ],
       ),
-      body: FutureBuilder<WalkingSessionModel?>(
-        future: FirestoreService.instance.getWalkingSession(widget.sessionId),
-        builder: (context, sessionSnapshot) {
-          if (!sessionSnapshot.hasData || sessionSnapshot.data == null) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          final session = sessionSnapshot.data!;
-          final userLocation = session.userLocation;
-
-          return FutureBuilder<List<VolunteerAvailabilityModel>>(
-            future: FirestoreService.instance.getNearbyVolunteers(
-              userLocation: userLocation,
-              radiusKm: 10,
-            ),
-            builder: (context, volunteersSnapshot) {
-              if (volunteersSnapshot.connectionState ==
-                  ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+      body: Consumer(
+        builder: (context, ref, _) {
+          final sessionAsync = ref.watch(walkingSessionProvider(widget.sessionId));
+          return sessionAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (err, st) => Center(child: Text('Error: $err')),
+            data: (session) {
+              if (session == null) {
+                return const Center(child: Text('Session not found'));
               }
-
-              final volunteers = volunteersSnapshot.data ?? [];
-
-              if (volunteers.isEmpty) {
-                return NoVolunteersWidget(
-                  onRetry: () {
-                    setState(() {});
-                  },
+              if (session.status == WalkingSessionStatus.searching) {
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text(
+                        'Searching for a volunteer to accept your request...',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ],
+                  ),
                 );
               }
-
-              return Column(
-                children: [
-                  // Header with session info
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    color: SakhiTheme.primary.withOpacity(0.05),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Going to',
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelSmall
-                              ?.copyWith(color: Colors.grey),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          session.destinationName,
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.schedule,
-                              size: 16,
-                              color: Colors.grey.shade600,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '${session.estimatedDuration.toStringAsFixed(0)} min estimated',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Volunteers list
-                  Expanded(
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      itemCount: volunteers.length,
-                      itemBuilder: (context, index) {
-                        final volunteer = volunteers[index];
-                        return VolunteerCard(
-                          volunteer: volunteer,
-                          onAccept: () => _acceptVolunteer(volunteer),
-                          onCall: () => _selectVolunteer(volunteer),
-                        );
-                      },
-                    ),
-                  ),
-
-                  // Bottom action
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Showing ${volunteers.length} volunteers within 10 km',
-                          style: Theme.of(context)
-                              .textTheme
-                              .labelSmall
-                              ?.copyWith(color: Colors.grey),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 12),
-                        OutlinedButton(
-                          onPressed: () {
-                            setState(() {});
-                          },
-                          child: const Text('Refresh List'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              );
+              if (session.status == WalkingSessionStatus.volunteerAccepted) {
+                Future.microtask(() {
+                  context.pushReplacement(
+                    '/walking-buddy/waiting-for-user-confirm',
+                    extra: widget.sessionId,
+                  );
+                });
+              }
+              return const SizedBox.shrink();
             },
           );
         },
@@ -241,6 +146,33 @@ class _WaitingForUserConfirmScreenState
     super.dispose();
   }
 
+  Future<void> _cancelSession(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel request?'),
+        content: const Text(
+            'Are you sure you want to cancel the walking buddy request?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final controller = ref.read(walkingBuddyControllerProvider.notifier);
+      await controller.cancelWalkingSession(widget.sessionId, 'User cancelled');
+      if (mounted) context.go('/home');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final sessionAsync = ref.watch(walkingSessionProvider(widget.sessionId));
@@ -259,6 +191,12 @@ class _WaitingForUserConfirmScreenState
         appBar: AppBar(
           title: const Text('Waiting for Confirmation'),
           automaticallyImplyLeading: false,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => _cancelSession(context),
+            ),
+          ],
         ),
         body: sessionAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
