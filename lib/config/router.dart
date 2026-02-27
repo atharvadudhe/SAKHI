@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../services/platform_helper.dart';
 import '../screens/splash_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/otp_screen.dart';
@@ -19,6 +20,7 @@ import '../screens/safety_tools/fake_call_screen.dart';
 import '../screens/safety_tools/virtual_companion_setup.dart';
 import '../screens/safety_tools/active_companion_screen.dart';
 import '../screens/safety_tools/pin_setup_screen.dart';
+import '../screens/safety_tools/camouflage_screen.dart';
 import '../screens/profile/volunteer_verification_screen.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -26,7 +28,14 @@ final GoRouter appRouter = GoRouter(
   debugLogDiagnostics: true,
   routes: [
     GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
-    GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+    GoRoute(
+      path: '/login',
+      builder: (context, state) {
+        // On Web/Desktop, skip the phone login and show email login directly.
+        if (isWebOrDesktop) return const EmailLoginScreen();
+        return const LoginScreen();
+      },
+    ),
     GoRoute(
       path: '/otp',
       builder: (context, state) {
@@ -85,7 +94,28 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/admin',
-      builder: (context, state) => const AdminDashboardScreen(),
+      builder: (context, state) {
+        // Guard: Admin Dashboard is only available on Web / Desktop.
+        if (!isWebOrDesktop) {
+          return const Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.block_rounded, size: 64, color: Colors.red),
+                  SizedBox(height: 16),
+                  Text(
+                    'Admin Dashboard is only available on Desktop.',
+                    style: TextStyle(fontSize: 16),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        return const AdminDashboardScreen();
+      },
     ),
     GoRoute(
       path: '/fake-call',
@@ -118,6 +148,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/volunteer-verification',
       builder: (context, state) => const VolunteerVerificationScreen(),
+    ),
+    GoRoute(
+      path: '/camouflage',
+      builder: (context, state) => const CamouflageScreen(),
     ),
   ],
 );
