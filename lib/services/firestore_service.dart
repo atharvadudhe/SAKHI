@@ -10,6 +10,8 @@ import '../models/location_update.dart';
 import '../models/emergency_contact.dart';
 import '../models/broadcast_model.dart';
 import '../models/live_location_model.dart';
+import '../models/location_share_model.dart';
+import '../models/location_share_alert_model.dart';
 
 class FirestoreService {
   FirestoreService._();
@@ -368,22 +370,38 @@ class FirestoreService {
   Future<String> createLocationShare({
     required String uid,
     required String userName,
+    required String senderPhone,
+    required List<String> recipientUids,
+    required List<String> recipientPhones,
     required GeoPoint location,
     required int durationMinutes,
   }) async {
     final id = _uuid.v4();
+    final expiresAt = DateTime.now().add(Duration(minutes: durationMinutes));
     await _db.collection(AppConstants.locationSharesCollection).doc(id).set({
       'id': id,
       'uid': uid,
       'userName': userName,
+      'senderPhone': senderPhone,
+      'recipientUids': recipientUids,
+      'recipientPhones': recipientPhones,
       'location': location,
       'createdAt': FieldValue.serverTimestamp(),
-      'expiresAt': Timestamp.fromDate(
-        DateTime.now().add(Duration(minutes: durationMinutes)),
-      ),
+      'expiresAt': Timestamp.fromDate(expiresAt),
       'durationMinutes': durationMinutes,
       'isActive': true,
     });
+
+    await createLocationShareAlerts(
+      shareId: id,
+      senderUid: uid,
+      senderName: userName,
+      senderPhone: senderPhone,
+      recipientUids: recipientUids,
+      recipientPhones: recipientPhones,
+      expiresAt: expiresAt,
+    );
+
     return id;
   }
 
@@ -404,12 +422,124 @@ class FirestoreService {
     await _db.collection(AppConstants.locationSharesCollection).doc(shareId).update({
       'isActive': false,
     });
+    await endLocationShareAlerts(shareId);
   }
 
   /// Update location on an active share
   Future<void> updateLocationShare(String shareId, GeoPoint location) async {
     await _db.collection(AppConstants.locationSharesCollection).doc(shareId).update({
       'location': location,
+    });
+  }
+
+  /// Stream a specific location share.
+  Stream<LocationShareModel?> locationShareStream(String shareId) {
+    return _db.collection(AppConstants.locationSharesCollection).doc(shareId).snapshots().map(
+      (doc) {
+        if (!doc.exists) return null;
+        return LocationShareModel.fromJson(doc.data()!);
+      },
+    );
+  }
+
+  /// Get users whose phone numbers match [phones].
+  Future<List<UserModel>> getUsersByPhones(List<String> phones) async {
+    final normalized = phones
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toSet()
+        .toList();
+    if (normalized.isEmpty) return [];
+
+    final users = <UserModel>[];
+    const chunkSize = 10; // Firestore whereIn limit
+    for (var i = 0; i < normalized.length; i += chunkSize) {
+      final chunk = normalized.sublist(
+        i,
+        (i + chunkSize > normalized.length) ? normalized.length : i + chunkSize,
+      );
+      final snap = await _db
+          .collection(AppConstants.usersCollection)
+          .where('phone', whereIn: chunk)
+          .get();
+      users.addAll(snap.docs.map((doc) => UserModel.fromJson(doc.data())));
+    }
+    return users;
+  }
+
+  /// Create recipient alerts for a location share.
+  Future<List<String>> createLocationShareAlerts({
+    required String shareId,
+    required String senderUid,
+    required String senderName,
+    required String senderPhone,
+    required List<String> recipientUids,
+    required List<String> recipientPhones,
+    required DateTime expiresAt,
+  }) async {
+    final ids = <String>[];
+    final batch = _db.batch();
+    for (var i = 0; i < recipientUids.length; i++) {
+      final alertId = _uuid.v4();
+      final ref = _db
+          .collection(AppConstants.locationShareAlertsCollection)
+          .doc(alertId);
+      batch.set(ref, {
+        'alertId': alertId,
+        'shareId': shareId,
+        'senderUid': senderUid,
+        'senderName': senderName,
+        'senderPhone': senderPhone,
+        'recipientUid': recipientUids[i],
+        'recipientPhone': i < recipientPhones.length ? recipientPhones[i] : '',
+        'status': 'active',
+        'createdAt': FieldValue.serverTimestamp(),
+        'expiresAt': Timestamp.fromDate(expiresAt),
+      });
+      ids.add(alertId);
+    }
+    await batch.commit();
+    return ids;
+  }
+
+  /// Mark all alerts for a share as ended.
+  Future<void> endLocationShareAlerts(String shareId) async {
+    final snap = await _db
+        .collection(AppConstants.locationShareAlertsCollection)
+        .where('shareId', isEqualTo: shareId)
+        .where('status', isEqualTo: 'active')
+        .get();
+    if (snap.docs.isEmpty) return;
+
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      batch.update(doc.reference, {
+        'status': 'ended',
+        'endedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+
+  /// Stream active incoming location-share alerts for a recipient.
+  Stream<List<LocationShareAlertModel>> incomingLocationShareAlertsStream(
+    String recipientUid,
+  ) {
+    return _db
+        .collection(AppConstants.locationShareAlertsCollection)
+        .where('recipientUid', isEqualTo: recipientUid)
+        .where('status', isEqualTo: 'active')
+        .snapshots()
+        .map((snap) {
+      final alerts = snap.docs
+          .map((doc) => LocationShareAlertModel.fromJson(doc.data()))
+          .toList();
+      alerts.sort((a, b) {
+        final aTs = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bTs = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bTs.compareTo(aTs);
+      });
+      return alerts;
     });
   }
 

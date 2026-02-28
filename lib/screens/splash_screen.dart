@@ -7,7 +7,7 @@ import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/platform_helper.dart';
 import '../models/user_model.dart';
-import '../widgets/animated_gradient_bg.dart';
+import '../widgets/sakhi_brand_logo.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -20,6 +20,7 @@ class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
   late final AnimationController _fadeController;
   late final AnimationController _scaleController;
+  late final AnimationController _pulseController;
   late final Animation<double> _fadeAnim;
   late final Animation<double> _scaleAnim;
 
@@ -40,6 +41,11 @@ class _SplashScreenState extends State<SplashScreen>
     _scaleAnim = Tween<double>(begin: 0.7, end: 1.0).animate(
       CurvedAnimation(parent: _scaleController, curve: Curves.elasticOut),
     );
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1300),
+    )..repeat(reverse: true);
 
     _fadeController.forward();
     _scaleController.forward();
@@ -103,83 +109,77 @@ class _SplashScreenState extends State<SplashScreen>
   void dispose() {
     _fadeController.dispose();
     _scaleController.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    const textDark = Color(0xFF2A2A2A);
+
     return Scaffold(
-      body: AnimatedGradientBackground(
-        child: SafeArea(
-          child: Center(
-            child: FadeTransition(
-              opacity: _fadeAnim,
-              child: ScaleTransition(
-                scale: _scaleAnim,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Logo image
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: Image.asset(
-                        'assets/images/sakhi-logo-3.png',
-                        width: 120,
-                        height: 120,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    // Title
-                    ShaderMask(
-                      shaderCallback: (bounds) => const LinearGradient(
-                        colors: [
-                          Color(0xFFE91E63),
-                          Color(0xFFFF6090),
-                          Color(0xFFF48FB1),
-                        ],
-                      ).createShader(bounds),
-                      child: const Text(
-                        'SAKHI',
-                        style: TextStyle(
-                          fontSize: 48,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 12,
-                          color: Colors.white,
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Center(
+          child: FadeTransition(
+            opacity: _fadeAnim,
+            child: ScaleTransition(
+              scale: _scaleAnim,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedBuilder(
+                    animation: _pulseController,
+                    builder: (context, child) {
+                      final pulse = 0.95 + (_pulseController.value * 0.08);
+                      return Transform.scale(
+                        scale: pulse,
+                        child: const SakhiBrandLogo(
+                          size: 152,
+                          withAura: true,
+                          elevated: true,
+                          framed: false,
                         ),
-                      ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 30),
+                  const Text(
+                    'SAKHI',
+                    style: TextStyle(
+                      fontSize: 42,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 8,
+                      color: Color(0xFFE91E63),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'सखी',
-                      style: TextStyle(
-                        fontSize: 22,
-                        letterSpacing: 6,
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontWeight: FontWeight.w500,
-                      ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'सखी',
+                    style: TextStyle(
+                      fontSize: 25,
+                      color: textDark,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0,
+                      fontFamilyFallback: [
+                        'Noto Sans Devanagari',
+                        'Nirmala UI',
+                        'Mangal',
+                        'Kohinoor Devanagari',
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Your Trusted Friend & Protector',
-                      style: TextStyle(
-                        fontSize: 14,
-                        letterSpacing: 3,
-                        color: Colors.white.withValues(alpha: 0.6),
-                        fontWeight: FontWeight.w300,
-                      ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Securing your journey...',
+                    style: TextStyle(
+                      fontSize: 14,
+                      letterSpacing: 1,
+                      color: textDark.withValues(alpha: 0.64),
+                      fontWeight: FontWeight.w500,
                     ),
-                    const SizedBox(height: 48),
-                    SizedBox(
-                      width: 32,
-                      height: 32,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white.withValues(alpha: 0.5),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),

@@ -109,151 +109,187 @@ class _OtpScreenState extends State<OtpScreen> {
         ),
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 24),
-              Text(
-                'Verify Your Number',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'We sent a 6-digit code to ${widget.phoneNumber}',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.6),
-                ),
-              ),
-              const SizedBox(height: 40),
-              // OTP Input boxes
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: List.generate(6, (index) {
-                  return SizedBox(
-                    width: 48,
-                    height: 56,
-                    child: TextFormField(
-                      controller: _controllers[index],
-                      focusNode: _focusNodes[index],
-                      keyboardType: TextInputType.number,
-                      textAlign: TextAlign.center,
-                      maxLength: 1,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      decoration: InputDecoration(
-                        counterText: '',
-                        contentPadding: EdgeInsets.zero,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      onChanged: (value) {
-                        if (value.isNotEmpty && index < 5) {
-                          _focusNodes[index + 1].requestFocus();
-                        }
-                        if (value.isEmpty && index > 0) {
-                          _focusNodes[index - 1].requestFocus();
-                        }
-                        // Auto-submit when all digits entered
-                        if (_otp.length == 6) {
-                          _verifyOTP();
-                        }
-                      },
-                    ),
-                  );
-                }),
-              ),
-              const SizedBox(height: 32),
-              // Verify button
-              ElevatedButton(
-                onPressed: _isLoading ? null : _verifyOTP,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: SakhiTheme.primary,
-                  foregroundColor: Colors.white,
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Text('Verify'),
-              ),
-              const SizedBox(height: 24),
-              // Resend
-              Center(
-                child: _resendSeconds > 0
-                    ? Text(
-                        'Resend code in $_resendSeconds s',
-                        style: TextStyle(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.5),
-                        ),
-                      )
-                    : TextButton(
-                        onPressed: () {
-                          _startResendTimer();
-                          AuthService.instance.verifyPhoneNumber(
-                            phoneNumber: widget.phoneNumber,
-                            onCodeSent: (verificationId) {
-                              if (!mounted) return;
-                              setState(() {
-                                _currentVerificationId = verificationId;
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Code resent')),
-                              );
-                            },
-                            onError: (error) {
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Could not resend code. Please try again.'),
-                                  backgroundColor: SakhiTheme.danger,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 430),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Verify Your Number',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.headlineMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'We sent a 6-digit code to ${widget.phoneNumber}',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurface
+                                      .withValues(alpha: 0.6),
+                                ),
+                          ),
+                          const SizedBox(height: 40),
+                          // OTP Input boxes
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: List.generate(6, (index) {
+                              return SizedBox(
+                                width: 48,
+                                height: 56,
+                                child: TextFormField(
+                                  controller: _controllers[index],
+                                  focusNode: _focusNodes[index],
+                                  keyboardType: TextInputType.number,
+                                  textAlign: TextAlign.center,
+                                  maxLength: 1,
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  decoration: InputDecoration(
+                                    counterText: '',
+                                    contentPadding: EdgeInsets.zero,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                  ],
+                                  onChanged: (value) {
+                                    if (value.isNotEmpty && index < 5) {
+                                      _focusNodes[index + 1].requestFocus();
+                                    }
+                                    if (value.isEmpty && index > 0) {
+                                      _focusNodes[index - 1].requestFocus();
+                                    }
+                                    // Auto-submit when all digits entered
+                                    if (_otp.length == 6) {
+                                      _verifyOTP();
+                                    }
+                                  },
                                 ),
                               );
-                            },
-                            onAutoVerified: (credential) async {
-                              try {
-                                await AuthService.instance.signInWithCredential(
-                                  credential,
-                                );
-                                if (!mounted) return;
-                                final hasProfile = await AuthService.instance
-                                    .hasProfile();
-                                if (!mounted) return;
-                                context.go(
-                                  hasProfile ? '/home' : '/profile-setup',
-                                );
-                              } catch (e) {
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Auto-verification failed. Enter the code manually.'),
+                            }),
+                          ),
+                          const SizedBox(height: 32),
+                          // Verify button
+                          ElevatedButton(
+                            onPressed: _isLoading ? null : _verifyOTP,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: SakhiTheme.primary,
+                              foregroundColor: Colors.white,
+                            ),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('Verify'),
+                          ),
+                          const SizedBox(height: 24),
+                          // Resend
+                          Center(
+                            child: _resendSeconds > 0
+                                ? Text(
+                                    'Resend code in $_resendSeconds s',
+                                    style: TextStyle(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.5),
+                                    ),
+                                  )
+                                : TextButton(
+                                    onPressed: () {
+                                      _startResendTimer();
+                                      AuthService.instance.verifyPhoneNumber(
+                                        phoneNumber: widget.phoneNumber,
+                                        onCodeSent: (verificationId) {
+                                          if (!mounted) return;
+                                          setState(() {
+                                            _currentVerificationId =
+                                                verificationId;
+                                          });
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Code resent'),
+                                            ),
+                                          );
+                                        },
+                                        onError: (error) {
+                                          if (!mounted) return;
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                'Could not resend code. Please try again.',
+                                              ),
+                                              backgroundColor:
+                                                  SakhiTheme.danger,
+                                            ),
+                                          );
+                                        },
+                                        onAutoVerified: (credential) async {
+                                          try {
+                                            await AuthService.instance
+                                                .signInWithCredential(
+                                                  credential,
+                                                );
+                                            if (!context.mounted) return;
+                                            final hasProfile = await AuthService
+                                                .instance
+                                                .hasProfile();
+                                            if (!context.mounted) return;
+                                            context.go(
+                                              hasProfile
+                                                  ? '/home'
+                                                  : '/profile-setup',
+                                            );
+                                          } catch (e) {
+                                            if (!context.mounted) return;
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  'Auto-verification failed. Enter the code manually.',
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        },
+                                      );
+                                    },
+                                    child: const Text('Resend Code'),
                                   ),
-                                );
-                              }
-                            },
-                          );
-                        },
-                        child: const Text('Resend Code'),
+                          ),
+                        ],
                       ),
+                    ),
+                  ),
+                ),
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

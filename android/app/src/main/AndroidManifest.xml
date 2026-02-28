@@ -50,7 +50,7 @@
             android:name=".CalculatorAlias"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_calculator"
+            android:icon="@mipmap/ic_launcher"
             android:label="Calculator"
             android:targetActivity=".MainActivity">
             <intent-filter>
@@ -63,7 +63,7 @@
             android:name=".CalendarAlias"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_calendar"
+            android:icon="@mipmap/ic_launcher"
             android:label="Calendar"
             android:targetActivity=".MainActivity">
             <intent-filter>
@@ -76,7 +76,7 @@
             android:name=".NotesAlias"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_notes"
+            android:icon="@mipmap/ic_launcher"
             android:label="Notes"
             android:targetActivity=".MainActivity">
             <intent-filter>
@@ -89,7 +89,7 @@
             android:name=".LotusAlias"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_lotus"
+            android:icon="@mipmap/ic_launcher"
             android:label="Sakhi"
             android:targetActivity=".MainActivity">
             <intent-filter>
@@ -102,7 +102,7 @@
             android:name=".SakhiAlias"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_sakhi"
+            android:icon="@mipmap/ic_launcher"
             android:label="Sakhi"
             android:targetActivity=".MainActivity">
             <intent-filter>
@@ -115,7 +115,7 @@
             android:name=".SakhiHindiAlias"
             android:enabled="false"
             android:exported="true"
-            android:icon="@mipmap/ic_sakhi_hindi"
+            android:icon="@mipmap/ic_launcher"
             android:label="Sakhi"
             android:targetActivity=".MainActivity">
             <intent-filter>

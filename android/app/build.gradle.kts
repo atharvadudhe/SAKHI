@@ -39,8 +39,15 @@ android {
         versionCode = flutter.versionCode
         versionName = flutter.versionName
 
-        // Inject Maps API key from local.properties into the manifest
-        manifestPlaceholders["mapsApiKey"] = localProperties.getProperty("MAPS_API_KEY", "")
+        // Inject Maps API key from local.properties or environment.
+        // Priority: local MAPS_API_KEY -> local GOOGLE_MAPS_API_KEY -> env vars.
+        val mapsKey =
+            localProperties.getProperty("MAPS_API_KEY")
+                ?: localProperties.getProperty("GOOGLE_MAPS_API_KEY")
+                ?: System.getenv("MAPS_API_KEY")
+                ?: System.getenv("GOOGLE_MAPS_API_KEY")
+                ?: ""
+        manifestPlaceholders["mapsApiKey"] = mapsKey
     }
 
     buildTypes {

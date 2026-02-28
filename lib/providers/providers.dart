@@ -18,6 +18,7 @@ import '../models/session_model.dart';
 import '../models/emergency_contact.dart';
 import '../models/broadcast_model.dart';
 import '../models/live_location_model.dart';
+import '../models/location_share_alert_model.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/location_service.dart';
@@ -308,6 +309,14 @@ final emergencyContactsProvider = StreamProvider<List<EmergencyContact>>((ref) {
   final user = ref.watch(authStateProvider).value;
   if (user == null) return Stream.value([]);
   return FirestoreService.instance.emergencyContactsStream(user.uid);
+});
+
+/// Stream of active incoming location-share alerts for the current user.
+final incomingLocationShareAlertsProvider =
+    StreamProvider<List<LocationShareAlertModel>>((ref) {
+  final user = ref.watch(authStateProvider).value;
+  if (user == null) return Stream.value([]);
+  return FirestoreService.instance.incomingLocationShareAlertsStream(user.uid);
 });
 
 // ───────── Broadcasts Feed Provider ─────────

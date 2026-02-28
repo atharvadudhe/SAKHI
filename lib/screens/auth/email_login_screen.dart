@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../services/auth_service.dart';
 import '../../services/platform_helper.dart';
 import '../../config/theme.dart';
+import '../../widgets/sakhi_brand_logo.dart';
 
 class EmailLoginScreen extends StatefulWidget {
   const EmailLoginScreen({super.key});
@@ -129,10 +130,12 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
       } else if (msg.contains('invalid-email')) {
         msg = 'Please enter a valid email address.';
       } else if (msg.contains('unavailable')) {
-        msg = 'Service temporarily unavailable. Please check your internet '
+        msg =
+            'Service temporarily unavailable. Please check your internet '
             'connection and try again.';
       } else if (msg.contains('Access Denied')) {
-        msg = 'Access Denied: Standard user login is restricted on Desktop/Web.';
+        msg =
+            'Access Denied: Standard user login is restricted on Desktop/Web.';
       }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -186,24 +189,7 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Shield logo
-                      Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.15),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.3),
-                            width: 2,
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.shield_rounded,
-                          size: 52,
-                          color: Colors.white,
-                        ),
-                      ),
+                      const SakhiBrandLogo(size: 100, elevated: true),
                       const SizedBox(height: 32),
                       const Text(
                         'SAKHI',
@@ -237,28 +223,31 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                       const SizedBox(height: 48),
                       // Feature highlights
                       ...[
-                        ('Real-time monitoring of all active sessions',
-                            Icons.monitor_heart_outlined),
-                        ('Manage users, volunteers & verifications',
-                            Icons.people_outline_rounded),
-                        ('Live map view with SOS alerts',
-                            Icons.map_outlined),
+                        (
+                          'Real-time monitoring of all active sessions',
+                          Icons.monitor_heart_outlined,
+                        ),
+                        (
+                          'Manage users, volunteers & verifications',
+                          Icons.people_outline_rounded,
+                        ),
+                        ('Live map view with SOS alerts', Icons.map_outlined),
                       ].map(
                         (item) => Padding(
                           padding: const EdgeInsets.symmetric(vertical: 6),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(item.$2,
-                                  size: 18,
-                                  color:
-                                      Colors.white.withValues(alpha: 0.7)),
+                              Icon(
+                                item.$2,
+                                size: 18,
+                                color: Colors.white.withValues(alpha: 0.7),
+                              ),
                               const SizedBox(width: 12),
                               Text(
                                 item.$1,
                                 style: TextStyle(
-                                  color:
-                                      Colors.white.withValues(alpha: 0.8),
+                                  color: Colors.white.withValues(alpha: 0.8),
                                   fontSize: 14,
                                 ),
                               ),
@@ -280,8 +269,10 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
               color: theme.scaffoldBackgroundColor,
               child: Center(
                 child: SingleChildScrollView(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 48, vertical: 32),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 48,
+                    vertical: 32,
+                  ),
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 420),
                     child: Form(
@@ -293,7 +284,9 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                           // Admin badge
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.deepPurple.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(20),
@@ -301,8 +294,11 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                             child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.admin_panel_settings_rounded,
-                                    size: 16, color: Colors.deepPurple),
+                                Icon(
+                                  Icons.admin_panel_settings_rounded,
+                                  size: 16,
+                                  color: Colors.deepPurple,
+                                ),
                                 SizedBox(width: 6),
                                 Text(
                                   'ADMIN PORTAL',
@@ -327,8 +323,9 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                           Text(
                             'Sign in with your administrator credentials to access the dashboard.',
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.6),
+                              color: theme.colorScheme.onSurface.withValues(
+                                alpha: 0.6,
+                              ),
                             ),
                           ),
                           const SizedBox(height: 36),
@@ -336,8 +333,9 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                           // Email
                           Text(
                             'Email Address',
-                            style: theme.textTheme.labelLarge
-                                ?.copyWith(fontWeight: FontWeight.w600),
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const SizedBox(height: 8),
                           TextFormField(
@@ -346,32 +344,39 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                             autofillHints: const [AutofillHints.email],
                             decoration: InputDecoration(
                               hintText: 'admin@sakhi.com',
-                              prefixIcon:
-                                  const Icon(Icons.email_outlined, size: 20),
+                              prefixIcon: const Icon(
+                                Icons.email_outlined,
+                                size: 20,
+                              ),
                               filled: true,
                               fillColor: theme.colorScheme.surfaceContainerLow,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(
-                                    color: theme.colorScheme.outlineVariant),
+                                  color: theme.colorScheme.outlineVariant,
+                                ),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(
-                                    color: theme.colorScheme.outlineVariant),
+                                  color: theme.colorScheme.outlineVariant,
+                                ),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: const BorderSide(
-                                    color: SakhiTheme.primary, width: 2),
+                                  color: SakhiTheme.primary,
+                                  width: 2,
+                                ),
                               ),
                             ),
                             validator: (value) {
                               if (value == null || value.trim().isEmpty) {
                                 return 'Please enter your email';
                               }
-                              final emailRegex =
-                                  RegExp(r'^[^@]+@[^@]+\.[^@]+$');
+                              final emailRegex = RegExp(
+                                r'^[^@]+@[^@]+\.[^@]+$',
+                              );
                               if (!emailRegex.hasMatch(value.trim())) {
                                 return 'Enter a valid email address';
                               }
@@ -383,8 +388,9 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                           // Password
                           Text(
                             'Password',
-                            style: theme.textTheme.labelLarge
-                                ?.copyWith(fontWeight: FontWeight.w600),
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           const SizedBox(height: 8),
                           TextFormField(
@@ -394,8 +400,9 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                             decoration: InputDecoration(
                               hintText: 'Enter password',
                               prefixIcon: const Icon(
-                                  Icons.lock_outline_rounded,
-                                  size: 20),
+                                Icons.lock_outline_rounded,
+                                size: 20,
+                              ),
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   _obscurePassword
@@ -403,25 +410,30 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                                       : Icons.visibility_rounded,
                                   size: 20,
                                 ),
-                                onPressed: () => setState(() =>
-                                    _obscurePassword = !_obscurePassword),
+                                onPressed: () => setState(
+                                  () => _obscurePassword = !_obscurePassword,
+                                ),
                               ),
                               filled: true,
                               fillColor: theme.colorScheme.surfaceContainerLow,
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(
-                                    color: theme.colorScheme.outlineVariant),
+                                  color: theme.colorScheme.outlineVariant,
+                                ),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(
-                                    color: theme.colorScheme.outlineVariant),
+                                  color: theme.colorScheme.outlineVariant,
+                                ),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: const BorderSide(
-                                    color: SakhiTheme.primary, width: 2),
+                                  color: SakhiTheme.primary,
+                                  width: 2,
+                                ),
                               ),
                             ),
                             validator: (value) {
@@ -478,15 +490,17 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                               color: Colors.amber.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                  color:
-                                      Colors.amber.withValues(alpha: 0.3)),
+                                color: Colors.amber.withValues(alpha: 0.3),
+                              ),
                             ),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(Icons.info_outline_rounded,
-                                    size: 18,
-                                    color: Colors.amber.shade800),
+                                Icon(
+                                  Icons.info_outline_rounded,
+                                  size: 18,
+                                  color: Colors.amber.shade800,
+                                ),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: Text(
@@ -536,27 +550,13 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 24),
-                Center(
-                  child: Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: SakhiTheme.primary.withValues(alpha: 0.1),
-                    ),
-                    child: const Icon(
-                      Icons.email_rounded,
-                      size: 32,
-                      color: SakhiTheme.primary,
-                    ),
-                  ),
-                ),
+                const Center(child: SakhiBrandLogo(size: 68, elevated: true)),
                 const SizedBox(height: 24),
                 Text(
                   _isSignUp ? 'Create Account' : 'Sign In',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -564,21 +564,19 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                       ? 'Sign up with your email to get started.'
                       : 'Welcome back! Enter your credentials.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withValues(alpha: 0.6),
-                      ),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.6),
+                  ),
                 ),
                 const SizedBox(height: 32),
 
                 // Email
                 Text(
                   'Email',
-                  style: Theme.of(context)
-                      .textTheme
-                      .labelLarge
-                      ?.copyWith(fontWeight: FontWeight.w600),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -605,10 +603,9 @@ class _EmailLoginScreenState extends State<EmailLoginScreen> {
                 // Password
                 Text(
                   'Password',
-                  style: Theme.of(context)
-                      .textTheme
-                      .labelLarge
-                      ?.copyWith(fontWeight: FontWeight.w600),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(

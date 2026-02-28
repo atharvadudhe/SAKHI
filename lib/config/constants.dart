@@ -24,6 +24,7 @@ class AppConstants {
   static const String locationUpdatesSubcollection = 'locationUpdates';
   static const String broadcastsCollection = 'broadcasts';
   static const String locationSharesCollection = 'locationShares';
+  static const String locationShareAlertsCollection = 'locationShareAlerts';
   static const String liveLocationsCollection = 'liveLocations';
 
   // ── Live Tracking Settings ──
