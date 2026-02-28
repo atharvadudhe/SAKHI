@@ -331,6 +331,14 @@ class FirestoreService {
         );
   }
 
+  /// Fetch all emergency contacts for a user once.
+  Future<List<EmergencyContact>> getEmergencyContacts(String uid) async {
+    final snap = await _contactsRef(uid).orderBy('name').get();
+    return snap.docs
+        .map((doc) => EmergencyContact.fromJson(doc.data()))
+        .toList();
+  }
+
   /// Add an emergency contact
   Future<void> addEmergencyContact(String uid, EmergencyContact contact) async {
     final id = contact.id.isEmpty ? _uuid.v4() : contact.id;
