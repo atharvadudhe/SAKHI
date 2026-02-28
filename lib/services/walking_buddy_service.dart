@@ -54,6 +54,14 @@ extension WalkingBuddyService on FirestoreService {
       'completedAt': null,
       'userReachedDestination': false,
       'volunteerConfirmedArrival': false,
+      'userConfirmedJourneyStart': false,
+      'volunteerConfirmedJourneyStart': false,
+      'journeyVerified': false,
+      'volunteerConfirmedSessionEnd': false,
+      'userJourneyStartConfirmedAt': null,
+      'volunteerJourneyStartConfirmedAt': null,
+      'userSessionEndRequestedAt': null,
+      'volunteerSessionEndConfirmedAt': null,
       'cancelReason': null,
       'estimatedDuration': estimatedDuration,
       'createdAtTimestamp': now.millisecondsSinceEpoch,
@@ -193,28 +201,113 @@ extension WalkingBuddyService on FirestoreService {
     });
   }
 
-  /// User confirms volunteer arrival and journey starts
+  /// User/volunteer confirms begin journey.
+  /// Journey starts only when both have confirmed after volunteer arrival.
+  Future<void> confirmJourneyStart(
+    String sessionId, {
+    required bool byVolunteer,
+  }) async {
+    final sessionRef = db.collection(_sessionsCollection).doc(sessionId);
+    final now = Timestamp.fromDate(DateTime.now());
+
+    await db.runTransaction((txn) async {
+      final snap = await txn.get(sessionRef);
+      if (!snap.exists) return;
+
+      final data = snap.data()!;
+      final status = data['status'] as String? ?? '';
+      if (status == WalkingSessionStatus.completed.name ||
+          status == WalkingSessionStatus.cancelled.name) {
+        return;
+      }
+
+      if (status != WalkingSessionStatus.volunteerReached.name &&
+          status != WalkingSessionStatus.journeyStarted.name) {
+        return;
+      }
+
+      final userConfirmed =
+          data['userConfirmedJourneyStart'] as bool? ?? false;
+      final volunteerConfirmed =
+          data['volunteerConfirmedJourneyStart'] as bool? ?? false;
+
+      final updatedUserConfirmed = byVolunteer ? userConfirmed : true;
+      final updatedVolunteerConfirmed = byVolunteer ? true : volunteerConfirmed;
+      final bothConfirmed = updatedUserConfirmed && updatedVolunteerConfirmed;
+
+      final updates = <String, dynamic>{
+        'userConfirmedJourneyStart': updatedUserConfirmed,
+        'volunteerConfirmedJourneyStart': updatedVolunteerConfirmed,
+      };
+
+      if (byVolunteer) {
+        updates['volunteerJourneyStartConfirmedAt'] = now;
+      } else {
+        updates['userJourneyStartConfirmedAt'] = now;
+      }
+
+      if (bothConfirmed) {
+        updates['status'] = WalkingSessionStatus.journeyStarted.name;
+        updates['journeyStartedAt'] = now;
+        updates['journeyVerified'] = true;
+      }
+
+      txn.update(sessionRef, updates);
+    });
+  }
+
+  /// Backward-compatible wrapper.
   Future<void> startJourney(String sessionId) async {
-    await db.collection(_sessionsCollection).doc(sessionId).update({
-      'status': WalkingSessionStatus.journeyStarted.name,
-      'journeyStartedAt': Timestamp.fromDate(DateTime.now()),
-    });
+    await confirmJourneyStart(sessionId, byVolunteer: false);
   }
 
-  /// User confirms reached destination
-  Future<void> userConfirmDestinationReached(String sessionId) async {
+  /// User requests end of session after reaching destination.
+  Future<void> userRequestSessionEnd(String sessionId) async {
+    final now = Timestamp.fromDate(DateTime.now());
     await db.collection(_sessionsCollection).doc(sessionId).update({
+      'status': WalkingSessionStatus.destinationReached.name,
       'userReachedDestination': true,
-      'destinationReachedAt': Timestamp.fromDate(DateTime.now()),
+      'destinationReachedAt': now,
+      'userSessionEndRequestedAt': now,
     });
   }
 
-  /// Complete the walking session
-  Future<void> completeWalkingSession(String sessionId) async {
-    await db.collection(_sessionsCollection).doc(sessionId).update({
-      'status': WalkingSessionStatus.completed.name,
-      'completedAt': Timestamp.fromDate(DateTime.now()),
+  /// Backward-compatible wrapper.
+  Future<void> userConfirmDestinationReached(String sessionId) async {
+    await userRequestSessionEnd(sessionId);
+  }
+
+  /// Volunteer confirms session end after user requests it.
+  Future<void> volunteerConfirmSessionEnd(String sessionId) async {
+    final sessionRef = db.collection(_sessionsCollection).doc(sessionId);
+    final now = Timestamp.fromDate(DateTime.now());
+
+    await db.runTransaction((txn) async {
+      final snap = await txn.get(sessionRef);
+      if (!snap.exists) return;
+
+      final data = snap.data()!;
+      final status = data['status'] as String? ?? '';
+      final userRequestedEnd = data['userReachedDestination'] as bool? ?? false;
+
+      if (!userRequestedEnd ||
+          (status != WalkingSessionStatus.destinationReached.name &&
+              status != WalkingSessionStatus.journeyStarted.name)) {
+        return;
+      }
+
+      txn.update(sessionRef, {
+        'volunteerConfirmedSessionEnd': true,
+        'volunteerSessionEndConfirmedAt': now,
+        'status': WalkingSessionStatus.completed.name,
+        'completedAt': now,
+      });
     });
+  }
+
+  /// Backward-compatible wrapper.
+  Future<void> completeWalkingSession(String sessionId) async {
+    await volunteerConfirmSessionEnd(sessionId);
   }
 
   /// Cancel a walking session
@@ -318,6 +411,16 @@ extension WalkingBuddyService on FirestoreService {
     required String userId,
     required Position position,
   }) async {
+    final sessionDoc =
+        await db.collection(_sessionsCollection).doc(sessionId).get();
+    if (!sessionDoc.exists) return;
+
+    final status = sessionDoc.data()?['status'] as String?;
+    if (status == WalkingSessionStatus.completed.name ||
+        status == WalkingSessionStatus.cancelled.name) {
+      return;
+    }
+
     final locationId = uuid.v4();
 
     await db

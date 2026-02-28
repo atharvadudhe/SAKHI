@@ -3,7 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// Walking session status flow:
 /// user -> destination search -> location confirmation ->
 /// request sent (searching) -> volunteer_accepted -> user_confirmed ->
-/// volunteer_reached -> journey_started -> destination_reached -> completed
+/// volunteer_reached -> both confirm start -> journey_started ->
+/// user requests end -> destination_reached -> volunteer confirms end -> completed
 enum WalkingSessionStatus {
   searching, // Awaiting volunteer acceptance
   volunteerAccepted, // Volunteer accepted, awaiting user confirmation
@@ -47,6 +48,14 @@ class WalkingSessionModel {
   // Additional metadata
   final bool userReachedDestination;
   final bool volunteerConfirmedArrival;
+  final bool userConfirmedJourneyStart;
+  final bool volunteerConfirmedJourneyStart;
+  final bool journeyVerified;
+  final bool volunteerConfirmedSessionEnd;
+  final DateTime? userJourneyStartConfirmedAt;
+  final DateTime? volunteerJourneyStartConfirmedAt;
+  final DateTime? userSessionEndRequestedAt;
+  final DateTime? volunteerSessionEndConfirmedAt;
   final String? cancelReason;
   final double estimatedDuration; // minutes
 
@@ -75,6 +84,14 @@ class WalkingSessionModel {
     this.completedAt,
     this.userReachedDestination = false,
     this.volunteerConfirmedArrival = false,
+    this.userConfirmedJourneyStart = false,
+    this.volunteerConfirmedJourneyStart = false,
+    this.journeyVerified = false,
+    this.volunteerConfirmedSessionEnd = false,
+    this.userJourneyStartConfirmedAt,
+    this.volunteerJourneyStartConfirmedAt,
+    this.userSessionEndRequestedAt,
+    this.volunteerSessionEndConfirmedAt,
     this.cancelReason,
     this.estimatedDuration = 30,
   });
@@ -118,6 +135,27 @@ class WalkingSessionModel {
       userReachedDestination: json['userReachedDestination'] as bool? ?? false,
       volunteerConfirmedArrival:
           json['volunteerConfirmedArrival'] as bool? ?? false,
+      userConfirmedJourneyStart:
+          json['userConfirmedJourneyStart'] as bool? ?? false,
+      volunteerConfirmedJourneyStart:
+          json['volunteerConfirmedJourneyStart'] as bool? ?? false,
+      journeyVerified: json['journeyVerified'] as bool? ?? false,
+      volunteerConfirmedSessionEnd:
+          json['volunteerConfirmedSessionEnd'] as bool? ?? false,
+      userJourneyStartConfirmedAt: json['userJourneyStartConfirmedAt'] != null
+          ? (json['userJourneyStartConfirmedAt'] as Timestamp).toDate()
+          : null,
+      volunteerJourneyStartConfirmedAt:
+          json['volunteerJourneyStartConfirmedAt'] != null
+              ? (json['volunteerJourneyStartConfirmedAt'] as Timestamp).toDate()
+              : null,
+      userSessionEndRequestedAt: json['userSessionEndRequestedAt'] != null
+          ? (json['userSessionEndRequestedAt'] as Timestamp).toDate()
+          : null,
+      volunteerSessionEndConfirmedAt:
+          json['volunteerSessionEndConfirmedAt'] != null
+              ? (json['volunteerSessionEndConfirmedAt'] as Timestamp).toDate()
+              : null,
       cancelReason: json['cancelReason'] as String?,
       estimatedDuration: (json['estimatedDuration'] as num?)?.toDouble() ?? 30,
     );
@@ -159,6 +197,24 @@ class WalkingSessionModel {
             completedAt != null ? Timestamp.fromDate(completedAt!) : null,
         'userReachedDestination': userReachedDestination,
         'volunteerConfirmedArrival': volunteerConfirmedArrival,
+        'userConfirmedJourneyStart': userConfirmedJourneyStart,
+        'volunteerConfirmedJourneyStart': volunteerConfirmedJourneyStart,
+        'journeyVerified': journeyVerified,
+        'volunteerConfirmedSessionEnd': volunteerConfirmedSessionEnd,
+        'userJourneyStartConfirmedAt': userJourneyStartConfirmedAt != null
+            ? Timestamp.fromDate(userJourneyStartConfirmedAt!)
+            : null,
+        'volunteerJourneyStartConfirmedAt':
+            volunteerJourneyStartConfirmedAt != null
+                ? Timestamp.fromDate(volunteerJourneyStartConfirmedAt!)
+                : null,
+        'userSessionEndRequestedAt': userSessionEndRequestedAt != null
+            ? Timestamp.fromDate(userSessionEndRequestedAt!)
+            : null,
+        'volunteerSessionEndConfirmedAt':
+            volunteerSessionEndConfirmedAt != null
+                ? Timestamp.fromDate(volunteerSessionEndConfirmedAt!)
+                : null,
         'cancelReason': cancelReason,
         'estimatedDuration': estimatedDuration,
       };
@@ -188,6 +244,14 @@ class WalkingSessionModel {
     DateTime? completedAt,
     bool? userReachedDestination,
     bool? volunteerConfirmedArrival,
+    bool? userConfirmedJourneyStart,
+    bool? volunteerConfirmedJourneyStart,
+    bool? journeyVerified,
+    bool? volunteerConfirmedSessionEnd,
+    DateTime? userJourneyStartConfirmedAt,
+    DateTime? volunteerJourneyStartConfirmedAt,
+    DateTime? userSessionEndRequestedAt,
+    DateTime? volunteerSessionEndConfirmedAt,
     String? cancelReason,
     double? estimatedDuration,
   }) {
@@ -218,6 +282,21 @@ class WalkingSessionModel {
           userReachedDestination ?? this.userReachedDestination,
       volunteerConfirmedArrival:
           volunteerConfirmedArrival ?? this.volunteerConfirmedArrival,
+      userConfirmedJourneyStart:
+          userConfirmedJourneyStart ?? this.userConfirmedJourneyStart,
+      volunteerConfirmedJourneyStart:
+          volunteerConfirmedJourneyStart ?? this.volunteerConfirmedJourneyStart,
+      journeyVerified: journeyVerified ?? this.journeyVerified,
+      volunteerConfirmedSessionEnd:
+          volunteerConfirmedSessionEnd ?? this.volunteerConfirmedSessionEnd,
+      userJourneyStartConfirmedAt:
+          userJourneyStartConfirmedAt ?? this.userJourneyStartConfirmedAt,
+      volunteerJourneyStartConfirmedAt: volunteerJourneyStartConfirmedAt ??
+          this.volunteerJourneyStartConfirmedAt,
+      userSessionEndRequestedAt:
+          userSessionEndRequestedAt ?? this.userSessionEndRequestedAt,
+      volunteerSessionEndConfirmedAt: volunteerSessionEndConfirmedAt ??
+          this.volunteerSessionEndConfirmedAt,
       cancelReason: cancelReason ?? this.cancelReason,
       estimatedDuration: estimatedDuration ?? this.estimatedDuration,
     );

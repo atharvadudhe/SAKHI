@@ -219,11 +219,14 @@ class WalkingBuddyController extends Notifier<AsyncValue<void>> {
     }
   }
 
-  /// User confirms volunteer arrival and journey starts
-  Future<bool> startJourney(String sessionId) async {
+  /// User/volunteer confirms begin journey. Starts only when both confirm.
+  Future<bool> startJourney(String sessionId, {required bool asVolunteer}) async {
     state = const AsyncLoading();
     try {
-      await FirestoreService.instance.startJourney(sessionId);
+      await FirestoreService.instance.confirmJourneyStart(
+        sessionId,
+        byVolunteer: asVolunteer,
+      );
       state = const AsyncData(null);
       return true;
     } catch (e, st) {
@@ -232,11 +235,11 @@ class WalkingBuddyController extends Notifier<AsyncValue<void>> {
     }
   }
 
-  /// User confirms reached destination
+  /// User requests end of session.
   Future<bool> userConfirmDestinationReached(String sessionId) async {
     state = const AsyncLoading();
     try {
-      await FirestoreService.instance.userConfirmDestinationReached(sessionId);
+      await FirestoreService.instance.userRequestSessionEnd(sessionId);
       state = const AsyncData(null);
       return true;
     } catch (e, st) {
@@ -245,11 +248,11 @@ class WalkingBuddyController extends Notifier<AsyncValue<void>> {
     }
   }
 
-  /// Complete walking session
+  /// Volunteer confirms and completes walking session.
   Future<bool> completeWalkingSession(String sessionId) async {
     state = const AsyncLoading();
     try {
-      await FirestoreService.instance.completeWalkingSession(sessionId);
+      await FirestoreService.instance.volunteerConfirmSessionEnd(sessionId);
       state = const AsyncData(null);
       ref.invalidate(userActiveWalkingSessionProvider);
       return true;
