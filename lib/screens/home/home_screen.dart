@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../config/theme.dart';
@@ -28,6 +31,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _fadeController;
   late final Animation<double> _fadeAnim;
+  DateTime? _lastNotificationsSeenAt;
+  String? _seenForUid;
 
   @override
   void initState() {
@@ -41,7 +46,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     // Wire hardware-trigger SOS to the same SOS handler used by the button
     HardwareTriggerService.instance.onSOSTriggered = () {
       if (mounted) {
-        _triggerSOS();
+        _triggerSOS(sendBroadcast: false);
         _showHardwareSOSConfirmation();
       }
     };
@@ -59,12 +64,116 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return Scaffold(body: _mainBody());
   }
 
+  String _notificationsSeenKey(String uid) => 'notifications_seen_at_$uid';
+
+  Future<void> _loadNotificationsSeen(String uid) async {
+    if (_seenForUid == uid) return;
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_notificationsSeenKey(uid));
+    DateTime? seenAt;
+    if (raw != null) {
+      seenAt = DateTime.tryParse(raw);
+    }
+    if (!mounted) return;
+    setState(() {
+      _seenForUid = uid;
+      _lastNotificationsSeenAt = seenAt;
+    });
+  }
+
+  Future<void> _markNotificationsSeen(String uid) async {
+    final now = DateTime.now();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_notificationsSeenKey(uid), now.toIso8601String());
+    if (!mounted) return;
+    setState(() {
+      _seenForUid = uid;
+      _lastNotificationsSeenAt = now;
+    });
+  }
+
+  Future<void> _openNotifications() async {
+    final uid = ref.read(authStateProvider).value?.uid;
+    if (uid != null) {
+      await _markNotificationsSeen(uid);
+    }
+    if (!mounted) return;
+    context.push('/notifications');
+  }
+
   Future<void> _startSession() async {
     if (!mounted) return;
     context.push('/walking-buddy/search-destination');
   }
 
-  Future<void> _triggerSOS() async {
+  String _formatCooldown(Duration d) {
+    final total = d.inSeconds;
+    final m = total ~/ 60;
+    final s = total % 60;
+    if (m > 0) return '${m}m ${s}s';
+    return '${s}s';
+  }
+
+  Future<void> _cancelActiveSos() async {
+    final uid = ref.read(authStateProvider).value?.uid;
+    if (uid == null) return;
+    await FirestoreService.instance.cancelActiveSosBroadcast(uid);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('SOS cancelled'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _triggerSOS({bool sendBroadcast = true}) async {
+    final uid = ref.read(authStateProvider).value?.uid;
+    if (uid == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please log in to use SOS'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (sendBroadcast) {
+      final active = await FirestoreService.instance.getActiveSosBroadcastForUser(
+        uid,
+      );
+      if (active != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('SOS is already active. Hold ✕ to cancel it first.'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+      final cooldown = await FirestoreService.instance.getSosCooldownRemaining(
+        uid,
+      );
+      if (cooldown != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Please wait ${_formatCooldown(cooldown)} before triggering SOS again.',
+              ),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     // 1. Trigger SOS on active session if exists
     final session = ref.read(activeSessionProvider).value;
     if (session != null) {
@@ -101,10 +210,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
 
     // 2. Also send an SOS broadcast to nearby volunteers
-    final uid = ref.read(authStateProvider).value?.uid;
-    bool broadcastSent = false;
-    if (uid != null) {
-      try {
+    bool broadcastSent = !sendBroadcast;
+    try {
+      if (sendBroadcast) {
         final position = await LocationService.instance.getCurrentPosition();
         if (position != null) {
           final user = ref.read(currentUserProvider).value;
@@ -117,18 +225,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           );
           broadcastSent = true;
         }
-      } catch (e) {
-        debugPrint('SOS broadcast failed: $e');
       }
-    } else if (mounted) {
-      // Not logged in - can't send SOS
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please log in to use SOS'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
+    } catch (e) {
+      final msg = e.toString();
+      if (mounted && msg.contains('sos_already_active')) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('SOS is already active. Hold ✕ to cancel it first.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+      if (mounted && msg.contains('sos_cooldown:')) {
+        final raw = msg.split('sos_cooldown:').last;
+        final sec = int.tryParse(raw) ?? 0;
+        final d = Duration(seconds: sec.clamp(0, 3600));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Please wait ${_formatCooldown(d)} before triggering SOS again.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+      debugPrint('SOS broadcast failed: $e');
     }
 
     if (!mounted) return;
@@ -290,9 +413,79 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget _mainBody() {
     final sessionAsync = ref.watch(activeSessionProvider);
     final broadcastsAsync = ref.watch(broadcastsFeedProvider);
+    final activeSharesAsync = ref.watch(activeLocationSharesProvider);
+    final heartbeatStateAsync = ref.watch(internalHeartbeatStateProvider);
+    final activeSosAsync = ref.watch(activeSosBroadcastProvider);
     final incomingLocationAlertsAsync = ref.watch(
       incomingLocationShareAlertsProvider,
     );
+    final currentUid = ref.watch(authStateProvider).value?.uid;
+    if (currentUid != null && _seenForUid != currentUid) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadNotificationsSeen(currentUid);
+      });
+    }
+    final activeSos = activeSosAsync.value;
+    final heartbeatState = heartbeatStateAsync.value;
+    final hasActiveHeartbeat =
+        heartbeatState != null &&
+        heartbeatState.isMonitoring &&
+        heartbeatState.expiresAt != null &&
+        DateTime.now().isBefore(heartbeatState.expiresAt!);
+    final heartbeatExpiresAt =
+        hasActiveHeartbeat ? heartbeatState.expiresAt : null;
+    final activeShare = activeSharesAsync.value?.isNotEmpty == true
+        ? activeSharesAsync.value!.first
+        : null;
+    final shareId = activeShare?['id'] as String?;
+    final expiresRaw = activeShare?['expiresAt'];
+    final shareExpiresAt = expiresRaw is Timestamp
+        ? expiresRaw.toDate()
+        : (expiresRaw as DateTime?);
+    final resolvedShareExpiresAt = shareExpiresAt ?? DateTime.now();
+    final hasActiveShare = shareId != null &&
+        shareExpiresAt != null &&
+        !((activeShare?['isActive'] as bool?) == false) &&
+        DateTime.now().isBefore(shareExpiresAt);
+    final latestMySos = (broadcastsAsync.value ?? const <BroadcastModel>[])
+        .where((b) => b.uid == (currentUid ?? '') && b.alertType == 'need_help')
+        .fold<BroadcastModel?>(null, (prev, b) {
+      if (prev == null) return b;
+      final prevTs = prev.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final curTs = b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return curTs.isAfter(prevTs) ? b : prev;
+    });
+    final cooldownRemaining = () {
+      if (latestMySos?.timestamp == null) return null;
+      final elapsed = DateTime.now().difference(latestMySos!.timestamp!);
+      const max = Duration(minutes: 1);
+      if (elapsed >= max) return null;
+      return max - elapsed;
+    }();
+    final cooldownUntil = cooldownRemaining == null
+        ? null
+        : DateTime.now().add(cooldownRemaining);
+    final activeIncomingLocationCount =
+        (incomingLocationAlertsAsync.value ?? const <LocationShareAlertModel>[])
+            .where((a) => a.isActive && !a.isExpired)
+            .where((a) {
+              final seen = _lastNotificationsSeenAt;
+              final createdAt = a.createdAt;
+              if (seen == null || createdAt == null) return true;
+              return createdAt.isAfter(seen);
+            })
+            .length;
+    final pendingBroadcastCount =
+        (broadcastsAsync.value ?? const <BroadcastModel>[])
+            .where((b) => b.alertType != 'need_help' || b.isActive)
+            .where((b) {
+              final seen = _lastNotificationsSeenAt;
+              final ts = b.timestamp;
+              if (seen == null || ts == null) return true;
+              return ts.isAfter(seen);
+            })
+            .length;
+    final notificationCount = activeIncomingLocationCount + pendingBroadcastCount;
 
     return FadeTransition(
       opacity: _fadeAnim,
@@ -324,8 +517,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                   actions: [
                     IconButton(
-                      icon: const Icon(Icons.notifications_outlined),
-                      onPressed: () => context.push('/notifications'),
+                      icon: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          const Icon(Icons.notifications_outlined),
+                          if (notificationCount > 0)
+                            Positioned(
+                              right: -6,
+                              top: -6,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 5,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: SakhiTheme.danger,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                constraints: const BoxConstraints(
+                                  minWidth: 16,
+                                  minHeight: 16,
+                                ),
+                                child: Text(
+                                  notificationCount > 99
+                                      ? '99+'
+                                      : '$notificationCount',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      onPressed: _openNotifications,
                     ),
                     IconButton(
                       icon: const Icon(Icons.person_outline_rounded),
@@ -357,6 +585,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             return const SizedBox.shrink();
                           }
                           return _IncomingLocationAlerts(alerts: activeAlerts);
+                        },
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, _) => const SizedBox.shrink(),
+                      ),
+                      const SizedBox(height: 10),
+                      broadcastsAsync.when(
+                        data: (broadcasts) {
+                          final sosAlerts = broadcasts
+                              .where(
+                                (b) =>
+                                    b.alertType == 'need_help' &&
+                                    b.isActive &&
+                                    b.uid != (currentUid ?? ''),
+                              )
+                              .take(3)
+                              .toList();
+                          if (sosAlerts.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
+                          return _IncomingSosAlerts(alerts: sosAlerts);
                         },
                         loading: () => const SizedBox.shrink(),
                         error: (_, _) => const SizedBox.shrink(),
@@ -442,69 +690,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           ),
                         ],
                       ),
-                      const SizedBox(height: 28),
-
-                      // ── Nearby Alert Feed ──
-                      Text(
-                        'Nearby Alerts',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.8),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      broadcastsAsync.when(
-                        data: (broadcasts) {
-                          if (broadcasts.isEmpty) {
-                            return Container(
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(16),
-                                color:
-                                    Theme.of(context).cardTheme.color ??
-                                    Theme.of(context).colorScheme.surface,
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.check_circle_outline_rounded,
-                                    color: SakhiTheme.safe,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      'No active alerts nearby. Your area looks safe!',
-                                      style: TextStyle(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface
-                                            .withValues(alpha: 0.6),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          }
-                          // Show latest 3 alerts
-                          final recent = broadcasts.take(3).toList();
-                          return Column(
-                            children: recent
-                                .map((b) => _AlertFeedCard(broadcast: b))
-                                .toList(),
-                          );
-                        },
-                        loading: () => const SizedBox(
-                          height: 48,
-                          child: Center(
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                        error: (_, _) => const SizedBox.shrink(),
-                      ),
                     ]),
                   ),
                 ),
@@ -516,7 +701,45 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               bottom: 32,
               left: 0,
               right: 0,
-              child: Center(child: SOSButton(onTriggered: _triggerSOS)),
+              child: SizedBox(
+                height: 84,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: hasActiveShare
+                            ? _LiveShareFloatingButton(
+                                expiresAt: resolvedShareExpiresAt,
+                                onTap: () => context.push('/location-sharing'),
+                              )
+                            : const SizedBox(width: 72, height: 72),
+                      ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: SOSButton(
+                          onTriggered: () => _triggerSOS(),
+                          onCancelTriggered: _cancelActiveSos,
+                          isActive: activeSos != null,
+                          cooldownUntil: cooldownUntil,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: hasActiveHeartbeat
+                            ? _InternalHeartbeatFloatingButton(
+                                expiresAt: heartbeatExpiresAt!,
+                                onTap: () => context.push('/internal-heartbeat'),
+                              )
+                            : const SizedBox(width: 72, height: 72),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -812,36 +1035,66 @@ class _IncomingAlertCard extends StatelessWidget {
   }
 }
 
-// ── Alert Feed Card ──
-class _AlertFeedCard extends StatelessWidget {
-  final BroadcastModel broadcast;
+class _IncomingSosAlerts extends StatelessWidget {
+  final List<BroadcastModel> alerts;
 
-  const _AlertFeedCard({required this.broadcast});
+  const _IncomingSosAlerts({required this.alerts});
 
-  Color get _alertColor {
-    switch (broadcast.alertType) {
-      case 'need_help':
-        return SakhiTheme.danger;
-      case 'suspicious_activity':
-        return SakhiTheme.searching;
-      case 'road_issue':
-        return SakhiTheme.connected;
-      default:
-        return SakhiTheme.searching;
-    }
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: SakhiTheme.danger.withValues(alpha: 0.08),
+        border: Border.all(color: SakhiTheme.danger.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.warning_rounded,
+                color: SakhiTheme.danger,
+                size: 18,
+              ),
+              SizedBox(width: 8),
+              Text(
+                'SOS Alerts',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...alerts.map((alert) => _IncomingSosAlertCard(alert: alert)),
+        ],
+      ),
+    );
   }
+}
 
-  IconData get _alertIcon {
-    switch (broadcast.alertType) {
-      case 'need_help':
-        return Icons.warning_rounded;
-      case 'suspicious_activity':
-        return Icons.visibility_rounded;
-      case 'road_issue':
-        return Icons.report_rounded;
-      default:
-        return Icons.campaign_rounded;
+class _IncomingSosAlertCard extends StatelessWidget {
+  final BroadcastModel alert;
+
+  const _IncomingSosAlertCard({required this.alert});
+
+  Future<void> _callSender(BuildContext context) async {
+    final sender = await FirestoreService.instance.getUser(alert.uid);
+    final phone = (sender?.phone ?? '').replaceAll(RegExp(r'[^\d+]'), '');
+    if (phone.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not find sender phone number'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
     }
+    await launchUrlString('tel:$phone');
   }
 
   @override
@@ -849,62 +1102,52 @@ class _AlertFeedCard extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          color:
-              Theme.of(context).cardTheme.color ??
-              Theme.of(context).colorScheme.surface,
-          border: Border.all(color: _alertColor.withValues(alpha: 0.2)),
+          color: Colors.white,
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 38,
-              height: 38,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: _alertColor.withValues(alpha: 0.1),
-              ),
-              child: Icon(_alertIcon, color: _alertColor, size: 18),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    broadcast.alertLabel,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      color: _alertColor,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    broadcast.message,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.6),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
             Text(
-              broadcast.timeAgo,
-              style: TextStyle(
-                fontSize: 11,
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.4),
-              ),
+              '${alert.userName ?? 'User'} sent an SOS alert',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      context.push(
+                        '/broadcast/sos-view',
+                        extra: {
+                          'senderUid': alert.uid,
+                          'senderName': alert.userName ?? 'User',
+                          'lat': alert.location.latitude,
+                          'lng': alert.location.longitude,
+                        },
+                      );
+                    },
+                    icon: const Icon(Icons.visibility_rounded),
+                    label: const Text('View'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _callSender(context),
+                    icon: const Icon(Icons.call_rounded),
+                    label: const Text('Call'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: SakhiTheme.danger,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -933,6 +1176,166 @@ class _FakeCallDelayTile extends StatelessWidget {
       trailing: const Icon(Icons.chevron_right_rounded),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       onTap: onTap,
+    );
+  }
+}
+
+class _LiveShareFloatingButton extends StatefulWidget {
+  final DateTime expiresAt;
+  final VoidCallback onTap;
+
+  const _LiveShareFloatingButton({
+    required this.expiresAt,
+    required this.onTap,
+  });
+
+  @override
+  State<_LiveShareFloatingButton> createState() => _LiveShareFloatingButtonState();
+}
+
+class _LiveShareFloatingButtonState extends State<_LiveShareFloatingButton> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = widget.expiresAt.difference(DateTime.now());
+    final sec = remaining.inSeconds.clamp(0, 3599);
+    final mm = (sec ~/ 60).toString().padLeft(2, '0');
+    final ss = (sec % 60).toString().padLeft(2, '0');
+
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: Container(
+        width: 72,
+        height: 72,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: const Color(0xFFE7F8F5),
+          border: Border.all(
+            color: SakhiTheme.connected.withValues(alpha: 0.65),
+            width: 1.4,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: SakhiTheme.connected.withValues(alpha: 0.20),
+              blurRadius: 10,
+              spreadRadius: 0.5,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.location_on_rounded,
+              color: SakhiTheme.connected,
+              size: 24,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              '$mm:$ss',
+              style: const TextStyle(
+                color: SakhiTheme.connected,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InternalHeartbeatFloatingButton extends StatefulWidget {
+  final DateTime expiresAt;
+  final VoidCallback onTap;
+
+  const _InternalHeartbeatFloatingButton({
+    required this.expiresAt,
+    required this.onTap,
+  });
+
+  @override
+  State<_InternalHeartbeatFloatingButton> createState() =>
+      _InternalHeartbeatFloatingButtonState();
+}
+
+class _InternalHeartbeatFloatingButtonState
+    extends State<_InternalHeartbeatFloatingButton> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = widget.expiresAt.difference(DateTime.now());
+    final sec = remaining.inSeconds.clamp(0, 3599);
+    final mm = (sec ~/ 60).toString().padLeft(2, '0');
+    final ss = (sec % 60).toString().padLeft(2, '0');
+
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: Container(
+        width: 72,
+        height: 72,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: const Color(0xFFFFEEF0),
+          border: Border.all(
+            color: SakhiTheme.danger.withValues(alpha: 0.45),
+            width: 1.4,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: SakhiTheme.danger.withValues(alpha: 0.15),
+              blurRadius: 10,
+              spreadRadius: 0.5,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.favorite_rounded, color: SakhiTheme.danger, size: 24),
+            const SizedBox(height: 2),
+            Text(
+              '$mm:$ss',
+              style: const TextStyle(
+                color: SakhiTheme.danger,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -81,7 +81,13 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated()
                     && request.resource.data.uid == request.auth.uid;
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin()
+                    || (
+                      isAuthenticated()
+                      && resource.data.uid == request.auth.uid
+                      && request.resource.data.uid == resource.data.uid
+                    );
+      allow delete: if isAdmin();
     }
 
     // ── Location Shares Collection ──

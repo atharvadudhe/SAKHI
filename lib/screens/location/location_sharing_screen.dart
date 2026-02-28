@@ -22,21 +22,12 @@ class LocationSharingScreen extends ConsumerStatefulWidget {
 class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
   int _selectedDuration = 30; // minutes
   bool _isSharing = false;
-  String? _activeShareId;
-  int _sharedWithCount = 0;
-  Timer? _expiryTimer;
   final Set<String> _selectedContactIds = <String>{};
 
   final _durations = [15, 30, 60, 120];
 
   @override
   void dispose() {
-    _expiryTimer?.cancel();
-    // Clean up active sharing when leaving the screen
-    if (_activeShareId != null) {
-      LocationService.instance.stopLocationUpdates();
-      FirestoreService.instance.stopLocationShare(_activeShareId!);
-    }
     super.dispose();
   }
 
@@ -83,6 +74,9 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
       final uid = ref.read(authStateProvider).value?.uid;
       if (uid == null) throw Exception('Not logged in');
 
+      // Defensive cleanup: ensure any stale active shares are closed first.
+      await FirestoreService.instance.stopAllActiveLocationShares(uid);
+
       final user = ref.read(currentUserProvider).value;
       final userName = user?.name ?? 'Unknown';
       final senderPhone = (user?.phone.trim().isNotEmpty ?? false)
@@ -120,18 +114,21 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
         durationMinutes: _selectedDuration,
       );
       if (!mounted) return;
-
-      setState(() {
-        _activeShareId = shareId;
-        _sharedWithCount = recipientUids.length;
-      });
+      ref.invalidate(activeLocationSharesProvider);
+      final expiresAt = DateTime.now().add(Duration(minutes: _selectedDuration));
 
       // Start updating location on the share
+      LocationService.instance.stopLocationUpdates();
       LocationService.instance.startLocationUpdates(
         onUpdate: (pos) {
-          if (_activeShareId != null) {
+          if (DateTime.now().isAfter(expiresAt)) {
+            FirestoreService.instance.stopLocationShare(shareId);
+            LocationService.instance.stopLocationUpdates();
+            return;
+          }
+          if (shareId.isNotEmpty) {
             FirestoreService.instance.updateLocationShare(
-              _activeShareId!,
+              shareId,
               GeoPoint(pos.latitude, pos.longitude),
             );
             // Also update user location
@@ -143,11 +140,10 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
         },
         intervalSeconds: 30,
       );
-
-      // Set expiry timer
-      _expiryTimer?.cancel();
-      _expiryTimer = Timer(Duration(minutes: _selectedDuration), () {
-        _stopSharing();
+      // Keep sharing alive even if this screen is closed.
+      Timer(Duration(minutes: _selectedDuration), () async {
+        await FirestoreService.instance.stopLocationShare(shareId);
+        LocationService.instance.stopLocationUpdates();
       });
 
       if (mounted) {
@@ -212,34 +208,63 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
     );
   }
 
-  Future<void> _stopSharing() async {
-    _expiryTimer?.cancel();
-    LocationService.instance.stopLocationUpdates();
+  Future<void> _stopSharing(String? shareId) async {
+    final uid = ref.read(authStateProvider).value?.uid;
+    try {
+      LocationService.instance.stopLocationUpdates();
 
-    if (_activeShareId != null) {
-      try {
-        await FirestoreService.instance.stopLocationShare(_activeShareId!);
-      } catch (_) {}
-    }
+      if (shareId != null && shareId.isNotEmpty) {
+        await FirestoreService.instance.stopLocationShare(shareId);
+      }
+      if (uid != null) {
+        await FirestoreService.instance.stopAllActiveLocationShares(uid);
+        final stillActive =
+            await FirestoreService.instance.getActiveLocationShares(uid);
+        if (stillActive.isNotEmpty) {
+          throw Exception(
+            'Location sharing is still active. Please try again.',
+          );
+        }
+      }
 
-    if (mounted) {
-      setState(() {
-        _activeShareId = null;
-        _isSharing = false;
-        _sharedWithCount = 0;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Location sharing stopped'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (mounted) {
+        ref.invalidate(activeLocationSharesProvider);
+        setState(() {
+          _isSharing = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Location sharing stopped'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Could not stop sharing: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final contactsAsync = ref.watch(emergencyContactsProvider);
+    final activeSharesAsync = ref.watch(activeLocationSharesProvider);
+    final activeShare = activeSharesAsync.value?.isNotEmpty == true
+        ? activeSharesAsync.value!.first
+        : null;
+    final activeShareId = activeShare?['id'] as String?;
+    final activeExpiresAtRaw = activeShare?['expiresAt'];
+    final activeExpiresAt = activeExpiresAtRaw is Timestamp
+        ? activeExpiresAtRaw.toDate()
+        : (activeExpiresAtRaw as DateTime?);
+    final resolvedExpiresAt = activeExpiresAt ?? DateTime.now();
+    final hasActiveShare =
+        activeShare != null &&
+        activeExpiresAt != null &&
+        !((activeShare['isActive'] as bool?) == false) &&
+        DateTime.now().isBefore(activeExpiresAt);
+    final sharedWithCount =
+        (activeShare?['recipientUids'] as List<dynamic>? ?? []).length;
 
     return Scaffold(
       appBar: AppBar(
@@ -300,12 +325,12 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
               ),
               const SizedBox(height: 28),
 
-              if (_activeShareId != null) ...[
+              if (hasActiveShare) ...[
                 // Active sharing UI
                 _ActiveSharingCard(
-                  duration: _selectedDuration,
-                  sharedWithCount: _sharedWithCount,
-                  onStop: _stopSharing,
+                  expiresAt: resolvedExpiresAt,
+                  sharedWithCount: sharedWithCount,
+                  onStop: () => _stopSharing(activeShareId),
                 ),
               ] else ...[
                 // Duration selection
@@ -462,7 +487,7 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
 
                 // Start button
                 ElevatedButton.icon(
-                  onPressed: _isSharing
+                  onPressed: _isSharing || hasActiveShare
                       ? null
                       : () => _startSharing(contactsAsync.value ?? const []),
                   icon: _isSharing
@@ -491,12 +516,12 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
 }
 
 class _ActiveSharingCard extends StatefulWidget {
-  final int duration;
+  final DateTime expiresAt;
   final int sharedWithCount;
   final VoidCallback onStop;
 
   const _ActiveSharingCard({
-    required this.duration,
+    required this.expiresAt,
     required this.sharedWithCount,
     required this.onStop,
   });
@@ -507,12 +532,10 @@ class _ActiveSharingCard extends StatefulWidget {
 
 class _ActiveSharingCardState extends State<_ActiveSharingCard> {
   late Timer _timer;
-  late DateTime _expiresAt;
 
   @override
   void initState() {
     super.initState();
-    _expiresAt = DateTime.now().add(Duration(minutes: widget.duration));
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -526,7 +549,7 @@ class _ActiveSharingCardState extends State<_ActiveSharingCard> {
 
   @override
   Widget build(BuildContext context) {
-    final remaining = _expiresAt.difference(DateTime.now());
+    final remaining = widget.expiresAt.difference(DateTime.now());
     final totalSeconds = remaining.inSeconds.clamp(0, 999999);
     final mins = totalSeconds ~/ 60;
     final secs = totalSeconds % 60;

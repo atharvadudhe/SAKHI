@@ -12,6 +12,7 @@ import '../screens/home/home_screen.dart';
 import '../screens/session/active_session_screen.dart';
 import '../screens/session/volunteer_dashboard_screen.dart';
 import '../screens/broadcast/broadcast_screen.dart';
+import '../screens/broadcast/sos_alert_view_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/contacts/emergency_contacts_screen.dart';
 import '../screens/location/location_sharing_screen.dart';
@@ -106,6 +107,27 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/broadcast',
       builder: (context, state) => const BroadcastScreen(),
+    ),
+    GoRoute(
+      path: '/broadcast/sos-view',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        final senderUid = extra['senderUid'] as String?;
+        final senderName = extra['senderName'] as String? ?? 'User';
+        final lat = (extra['lat'] as num?)?.toDouble();
+        final lng = (extra['lng'] as num?)?.toDouble();
+        if (senderUid == null || lat == null || lng == null) {
+          return const Scaffold(
+            body: Center(child: Text('No SOS alert data provided')),
+          );
+        }
+        return SosAlertViewScreen(
+          senderUid: senderUid,
+          senderName: senderName,
+          latitude: lat,
+          longitude: lng,
+        );
+      },
     ),
     GoRoute(
       path: '/profile',

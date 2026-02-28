@@ -502,7 +502,9 @@ class _BroadcastScreenState extends ConsumerState<BroadcastScreen> {
   @override
   Widget build(BuildContext context) {
     final broadcastsAsync = ref.watch(broadcastsFeedProvider);
-    final allBroadcasts = broadcastsAsync.value ?? const <BroadcastModel>[];
+    final allBroadcasts = (broadcastsAsync.value ?? const <BroadcastModel>[])
+        .where((b) => b.alertType != 'need_help' || b.isActive)
+        .toList();
     final markers = _buildMarkers(_nearbyBroadcasts(allBroadcasts));
 
     return Scaffold(

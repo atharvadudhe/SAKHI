@@ -7,13 +7,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/walking_request_model.dart';
 import '../services/firestore_service.dart';
 import '../services/walking_request_service.dart';
 import '../providers/volunteer_providers.dart'; // <- provider for incoming requests
 import 'session/volunteer_requests_manager_screen.dart';
-import 'live_tracking_screen.dart';
 
 /// Screen that shows incoming requests to volunteers
 /// Accept/reject actions are in VolunteerRequestsManagerScreen
@@ -33,9 +33,11 @@ class VolunteerModeScreen extends ConsumerStatefulWidget {
 
 class _VolunteerModeScreenState extends ConsumerState<VolunteerModeScreen> {
   late FirestoreService _firestoreService;
-  late Map<String, bool> _loadingStates; // Track loading per request
   LatLng? _volLocation;
   StreamSubscription<Position>? _positionSub;
+  double _maxRangeKm = 5.0; // Volunteer can set from 2km and above
+  static const double _minRangeKm = 2.0;
+  static const double _maxAllowedRangeKm = 50.0;
   
   // Debug state
   final bool _showDebugPanel = true;
@@ -55,10 +57,10 @@ class _VolunteerModeScreenState extends ConsumerState<VolunteerModeScreen> {
     super.initState();
     // use singleton instance
     _firestoreService = FirestoreService.instance;
-    _loadingStates = {};
     _addDebugLog('🛠️ initState called, volunteerId=$_volunteerId');
 
     // initialize location (if permission granted)
+    _loadSavedRange();
     _initVolunteerLocation();
     _startVolunteerLocationUpdates();
     // Listen to provider events for debugging (will log lengths/errors)
@@ -102,6 +104,34 @@ class _VolunteerModeScreenState extends ConsumerState<VolunteerModeScreen> {
       });
     }
     print('🎬 [VolunteerMode] $log');
+  }
+
+  String get _rangePrefKey => 'volunteer_range_km_$_volunteerId';
+
+  Future<void> _loadSavedRange() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getDouble(_rangePrefKey);
+      if (saved == null || !mounted) return;
+      setState(() {
+        _maxRangeKm = saved.clamp(_minRangeKm, _maxAllowedRangeKm);
+      });
+      _addDebugLog('📦 Loaded saved range: ${_maxRangeKm.toStringAsFixed(1)} km');
+    } catch (e) {
+      _addDebugLog('⚠️ Failed to load saved range: $e');
+    }
+  }
+
+  Future<void> _saveRange(double value) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(
+        _rangePrefKey,
+        value.clamp(_minRangeKm, _maxAllowedRangeKm),
+      );
+    } catch (e) {
+      _addDebugLog('⚠️ Failed to save range: $e');
+    }
   }
 
   Future<void> _initVolunteerLocation() async {
@@ -315,6 +345,7 @@ class _VolunteerModeScreenState extends ConsumerState<VolunteerModeScreen> {
       },
       data: (requests) {
         _addDebugLog('📊 Provider returned ${requests.length} requests');
+        final filteredRequests = _filterByRange(requests);
         if (requests.isEmpty) {
           _addDebugLog('⚠️ NO REQUESTS FOUND (provider)');
           return Center(
@@ -351,19 +382,102 @@ class _VolunteerModeScreenState extends ConsumerState<VolunteerModeScreen> {
           );
         }
 
-        // Display requests
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          itemCount: requests.length,
-          itemBuilder: (context, index) {
-            final request = requests[index];
-            return _WalkingBuddyRequestCard(
-              request: request,
-              volunteerLocation: _volLocation,
-            );
-          },
+        return Column(
+          children: [
+            _RangeFilterCard(
+              valueKm: _maxRangeKm,
+              onChanged: (value) {
+                setState(() => _maxRangeKm = value);
+                _saveRange(value);
+              },
+            ),
+            Expanded(
+              child: filteredRequests.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text(
+                          _volLocation == null
+                              ? 'Location unavailable. Showing range filter only.'
+                              : 'No requests within ${_maxRangeKm.toStringAsFixed(1)} km',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 15),
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: filteredRequests.length,
+                      itemBuilder: (context, index) {
+                        final request = filteredRequests[index];
+                        return _WalkingBuddyRequestCard(
+                          request: request,
+                          volunteerLocation: _volLocation,
+                        );
+                      },
+                    ),
+            ),
+          ],
         );
       },
+    );
+  }
+
+  List<WalkingRequestModel> _filterByRange(List<WalkingRequestModel> requests) {
+    final vol = _volLocation;
+    if (vol == null) return requests;
+    return requests.where((request) {
+      final distance = Geolocator.distanceBetween(
+            vol.latitude,
+            vol.longitude,
+            request.requesterLocation.latitude,
+            request.requesterLocation.longitude,
+          ) /
+          1000.0;
+      return distance <= _maxRangeKm;
+    }).toList();
+  }
+}
+
+class _RangeFilterCard extends StatelessWidget {
+  final double valueKm;
+  final ValueChanged<double> onChanged;
+
+  const _RangeFilterCard({
+    required this.valueKm,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+      decoration: BoxDecoration(
+        color: Colors.purple.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.purple.shade100),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Request Range: ${valueKm.toStringAsFixed(1)} km',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: Colors.purple.shade700,
+            ),
+          ),
+          Slider(
+            value: valueKm,
+            min: 2,
+            max: _VolunteerModeScreenState._maxAllowedRangeKm,
+            divisions: 96, // 0.5km step
+            label: '${valueKm.toStringAsFixed(1)} km',
+            onChanged: onChanged,
+          ),
+        ],
+      ),
     );
   }
 }
