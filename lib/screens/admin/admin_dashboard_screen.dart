@@ -13,6 +13,7 @@ import '../../models/live_location_model.dart';
 import '../../providers/providers.dart';
 import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
+import '../../widgets/sakhi_brand_logo.dart';
 import 'widgets/pending_volunteers_list.dart';
 
 /// Admin dashboard — web-only.
@@ -54,7 +55,8 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
     // credentials were validated). Otherwise fall back to Firestore role check.
     final isAdminOverride = AuthService.instance.isAdminOverrideActive;
     final currentUser = ref.watch(currentUserProvider).value;
-    final hasAccess = isAdminOverride ||
+    final hasAccess =
+        isAdminOverride ||
         (currentUser != null && currentUser.role == UserRole.admin);
 
     if (!hasAccess) {
@@ -63,12 +65,13 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.lock_outline_rounded,
-                  size: 64,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.3)),
+              Icon(
+                Icons.lock_outline_rounded,
+                size: 64,
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.3),
+              ),
               const SizedBox(height: 16),
               Text(
                 'Unauthorized Access',
@@ -107,15 +110,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: SakhiTheme.primary.withValues(alpha: 0.1),
-                        ),
-                        child: const Icon(Icons.shield_rounded,
-                            color: SakhiTheme.primary, size: 20),
-                      ),
+                      const SakhiBrandLogo(size: 34),
                       const SizedBox(width: 10),
                       Text(
                         'SAKHI Admin',
@@ -135,8 +130,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                   final tab = entry.value;
                   final selected = _selectedTab == i;
                   return Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 2,
+                    ),
                     child: Material(
                       color: selected
                           ? SakhiTheme.primary.withValues(alpha: 0.1)
@@ -147,7 +144,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                         onTap: () => setState(() => _selectedTab = i),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
                           child: Row(
                             children: [
                               Icon(
@@ -155,8 +154,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                                 size: 20,
                                 color: selected
                                     ? SakhiTheme.primary
-                                    : theme.colorScheme.onSurface
-                                        .withValues(alpha: 0.5),
+                                    : theme.colorScheme.onSurface.withValues(
+                                        alpha: 0.5,
+                                      ),
                               ),
                               const SizedBox(width: 12),
                               Text(
@@ -167,8 +167,9 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                                       : FontWeight.w500,
                                   color: selected
                                       ? SakhiTheme.primary
-                                      : theme.colorScheme.onSurface
-                                          .withValues(alpha: 0.7),
+                                      : theme.colorScheme.onSurface.withValues(
+                                          alpha: 0.7,
+                                        ),
                                 ),
                               ),
                             ],
@@ -201,9 +202,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           // ── Main Content ──
           Expanded(
             child: switch (_selectedTab) {
-              0 => _GodModeMapTab(
-                  onMapCreated: (c) => _mapController = c,
-                ),
+              0 => _GodModeMapTab(onMapCreated: (c) => _mapController = c),
               1 => const _LiveAlertsTab(),
               2 => const _UserManagementTab(),
               3 => const PendingVolunteersList(),
@@ -270,10 +269,7 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
           markerId: MarkerId('live_${t.uid}'),
           position: LatLng(t.latitude, t.longitude),
           icon: BitmapDescriptor.defaultMarkerWithHue(hue),
-          infoWindow: InfoWindow(
-            title: t.userName,
-            snippet: _snippetFor(t),
-          ),
+          infoWindow: InfoWindow(title: t.userName, snippet: _snippetFor(t)),
           onTap: () => setState(() => _selectedTracker = t),
         ),
       );
@@ -282,7 +278,9 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
     // 2. SOS sessions that may not (yet) have a liveLocations entry
     final trackedUids = trackers.map((t) => t.uid).toSet();
     for (final s in sessions) {
-      if (s.isSOS && s.userLocation != null && !trackedUids.contains(s.createdBy)) {
+      if (s.isSOS &&
+          s.userLocation != null &&
+          !trackedUids.contains(s.createdBy)) {
         final safeId = s.sessionId.length >= 8
             ? s.sessionId.substring(0, 8)
             : s.sessionId;
@@ -293,8 +291,9 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
               s.userLocation!.latitude,
               s.userLocation!.longitude,
             ),
-            icon:
-                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueRed,
+            ),
             infoWindow: InfoWindow(
               title: 'SOS (session)',
               snippet: 'Session $safeId',
@@ -327,8 +326,10 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
         color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
         child: Row(
           children: [
-            Icon(Icons.touch_app_rounded,
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.4)),
+            Icon(
+              Icons.touch_app_rounded,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+            ),
             const SizedBox(width: 10),
             Text(
               'Tap a marker on the map to see details',
@@ -366,10 +367,7 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
             backgroundColor: markerColor.withValues(alpha: 0.15),
             child: Text(
               t.userName.isNotEmpty ? t.userName[0].toUpperCase() : '?',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: markerColor,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, color: markerColor),
             ),
           ),
           const SizedBox(width: 14),
@@ -392,8 +390,7 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
                   '${t.role == 'volunteer' ? 'Volunteer' : 'User'} • $reasonLabel',
                   style: TextStyle(
                     fontSize: 12,
-                    color:
-                        theme.colorScheme.onSurface.withValues(alpha: 0.6),
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.6),
                   ),
                 ),
               ],
@@ -402,8 +399,7 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
 
           // ── Reason badge ──
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: markerColor.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(8),
@@ -430,10 +426,7 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
               color: t.batteryLevel! > 20 ? SakhiTheme.safe : SakhiTheme.danger,
             ),
             const SizedBox(width: 4),
-            Text(
-              '${t.batteryLevel}%',
-              style: const TextStyle(fontSize: 12),
-            ),
+            Text('${t.batteryLevel}%', style: const TextStyle(fontSize: 12)),
             const SizedBox(width: 16),
           ],
 
@@ -453,8 +446,7 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
                 t.timeSinceUpdate,
                 style: TextStyle(
                   fontSize: 11,
-                  color:
-                      theme.colorScheme.onSurface.withValues(alpha: 0.5),
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                 ),
               ),
             ],
@@ -491,11 +483,11 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
     final trackedUids = trackers.map((t) => t.uid).toSet();
     final sosCount =
         trackers.where((t) => t.trackingReason == TrackingReason.sos).length +
-            sessions.where((s) => s.isSOS && !trackedUids.contains(s.createdBy)).length;
-    final volunteerCount =
-        trackers.where((t) => t.role == 'volunteer').length;
-    final sessionUserCount =
-        trackers.where((t) => t.role == 'user').length;
+        sessions
+            .where((s) => s.isSOS && !trackedUids.contains(s.createdBy))
+            .length;
+    final volunteerCount = trackers.where((t) => t.role == 'volunteer').length;
+    final sessionUserCount = trackers.where((t) => t.role == 'user').length;
     final totalUsers = users.length;
 
     return Column(
@@ -503,8 +495,9 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
         // ── Stats ribbon ──
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-          color:
-              theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+          color: theme.colorScheme.surfaceContainerHighest.withValues(
+            alpha: 0.4,
+          ),
           child: Row(
             children: [
               _StatChip(
@@ -522,10 +515,7 @@ class _GodModeMapTabState extends ConsumerState<_GodModeMapTab> {
                 color: SakhiTheme.connected,
               ),
               const SizedBox(width: 12),
-              _StatChip(
-                label: '$sosCount SOS',
-                color: SakhiTheme.danger,
-              ),
+              _StatChip(label: '$sosCount SOS', color: SakhiTheme.danger),
               const SizedBox(width: 12),
               _StatChip(
                 label: '${markers.length} Markers',
@@ -631,21 +621,26 @@ class _LiveAlertsTab extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Live Alerts',
-              style: theme.textTheme.headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.bold)),
+          Text(
+            'Live Alerts',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 20),
 
           // ── Active Sessions Table ──
-          Text('Active Sessions',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600)),
+          Text(
+            'Active Sessions',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 8),
           Expanded(
             flex: 1,
             child: sessionsAsync.when(
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Text('Error: $e'),
               data: (sessions) {
                 if (sessions.isEmpty) {
@@ -653,8 +648,10 @@ class _LiveAlertsTab extends ConsumerWidget {
                     child: Text(
                       'No active sessions.',
                       style: TextStyle(
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.5)),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
+                      ),
                     ),
                   );
                 }
@@ -684,33 +681,40 @@ class _LiveAlertsTab extends ConsumerWidget {
                         default:
                           statusColor = theme.colorScheme.onSurface;
                       }
-                      return DataRow(cells: [
-                        DataCell(Text(
-                          s.sessionId.substring(0, 8),
-                          style: theme.textTheme.bodySmall,
-                        )),
-                        DataCell(Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: statusColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            s.status.name.toUpperCase(),
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: statusColor,
+                      return DataRow(
+                        cells: [
+                          DataCell(
+                            Text(
+                              s.sessionId.substring(0, 8),
+                              style: theme.textTheme.bodySmall,
                             ),
                           ),
-                        )),
-                        DataCell(Text(s.createdBy.substring(0, 8))),
-                        DataCell(
-                            Text(s.volunteerName ?? '—')),
-                        DataCell(Text('${s.timeLimit}min')),
-                        DataCell(Text('${s.elapsed.inMinutes}min')),
-                      ]);
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: statusColor.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                s.status.name.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: statusColor,
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataCell(Text(s.createdBy.substring(0, 8))),
+                          DataCell(Text(s.volunteerName ?? '—')),
+                          DataCell(Text('${s.timeLimit}min')),
+                          DataCell(Text('${s.elapsed.inMinutes}min')),
+                        ],
+                      );
                     }).toList(),
                   ),
                 );
@@ -721,15 +725,17 @@ class _LiveAlertsTab extends ConsumerWidget {
           const SizedBox(height: 20),
 
           // ── Broadcasts Table ──
-          Text('Community Broadcasts',
-              style: theme.textTheme.titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w600)),
+          Text(
+            'Community Broadcasts',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 8),
           Expanded(
             flex: 1,
             child: broadcastsAsync.when(
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Text('Error: $e'),
               data: (broadcasts) {
                 if (broadcasts.isEmpty) {
@@ -737,8 +743,10 @@ class _LiveAlertsTab extends ConsumerWidget {
                     child: Text(
                       'No broadcasts.',
                       style: TextStyle(
-                          color: theme.colorScheme.onSurface
-                              .withValues(alpha: 0.5)),
+                        color: theme.colorScheme.onSurface.withValues(
+                          alpha: 0.5,
+                        ),
+                      ),
                     ),
                   );
                 }
@@ -755,18 +763,22 @@ class _LiveAlertsTab extends ConsumerWidget {
                       DataColumn(label: Text('Time')),
                     ],
                     rows: broadcasts.map((b) {
-                      return DataRow(cells: [
-                        DataCell(Text(b.alertLabel)),
-                        DataCell(SizedBox(
-                          width: 300,
-                          child: Text(
-                            b.message,
-                            overflow: TextOverflow.ellipsis,
+                      return DataRow(
+                        cells: [
+                          DataCell(Text(b.alertLabel)),
+                          DataCell(
+                            SizedBox(
+                              width: 300,
+                              child: Text(
+                                b.message,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ),
-                        )),
-                        DataCell(Text(b.userName ?? b.uid.substring(0, 8))),
-                        DataCell(Text(b.timeAgo)),
-                      ]);
+                          DataCell(Text(b.userName ?? b.uid.substring(0, 8))),
+                          DataCell(Text(b.timeAgo)),
+                        ],
+                      );
                     }).toList(),
                   ),
                 );
@@ -795,14 +807,16 @@ class _UserManagementTab extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('User Management',
-              style: theme.textTheme.headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.bold)),
+          Text(
+            'User Management',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 20),
           Expanded(
             child: usersAsync.when(
-              loading: () =>
-                  const Center(child: CircularProgressIndicator()),
+              loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Text('Error loading users: $e'),
               data: (users) {
                 if (users.isEmpty) {
@@ -831,70 +845,86 @@ class _UserManagementTab extends ConsumerWidget {
                         case UserRole.user:
                           roleColor = SakhiTheme.connected;
                       }
-                      return DataRow(cells: [
-                        DataCell(Text(u.name)),
-                        DataCell(Text(
-                            u.phone.isNotEmpty ? u.phone : '—')),
-                        DataCell(Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: roleColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            u.role.name.toUpperCase(),
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: roleColor,
+                      return DataRow(
+                        cells: [
+                          DataCell(Text(u.name)),
+                          DataCell(Text(u.phone.isNotEmpty ? u.phone : '—')),
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: roleColor.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                u.role.name.toUpperCase(),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: roleColor,
+                                ),
+                              ),
                             ),
                           ),
-                        )),
-                        DataCell(Icon(
-                          u.isAvailable
-                              ? Icons.check_circle_rounded
-                              : Icons.remove_circle_outline_rounded,
-                          size: 18,
-                          color: u.isAvailable
-                              ? SakhiTheme.safe
-                              : theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.3),
-                        )),
-                        DataCell(Icon(
-                          u.verifiedStatus
-                              ? Icons.verified_rounded
-                              : Icons.cancel_outlined,
-                          size: 18,
-                          color: u.verifiedStatus
-                              ? SakhiTheme.safe
-                              : theme.colorScheme.onSurface
-                                  .withValues(alpha: 0.3),
-                        )),
-                        DataCell(
-                          PopupMenuButton<String>(
-                            icon: const Icon(Icons.more_vert_rounded, size: 18),
-                            onSelected: (role) {
-                              FirestoreService.instance
-                                  .updateUserRole(u.uid, role);
-                            },
-                            itemBuilder: (_) => [
-                              const PopupMenuItem(
-                                value: 'user',
-                                child: Text('Set User'),
-                              ),
-                              const PopupMenuItem(
-                                value: 'volunteer',
-                                child: Text('Set Volunteer'),
-                              ),
-                              const PopupMenuItem(
-                                value: 'admin',
-                                child: Text('Set Admin'),
-                              ),
-                            ],
+                          DataCell(
+                            Icon(
+                              u.isAvailable
+                                  ? Icons.check_circle_rounded
+                                  : Icons.remove_circle_outline_rounded,
+                              size: 18,
+                              color: u.isAvailable
+                                  ? SakhiTheme.safe
+                                  : theme.colorScheme.onSurface.withValues(
+                                      alpha: 0.3,
+                                    ),
+                            ),
                           ),
-                        ),
-                      ]);
+                          DataCell(
+                            Icon(
+                              u.verifiedStatus
+                                  ? Icons.verified_rounded
+                                  : Icons.cancel_outlined,
+                              size: 18,
+                              color: u.verifiedStatus
+                                  ? SakhiTheme.safe
+                                  : theme.colorScheme.onSurface.withValues(
+                                      alpha: 0.3,
+                                    ),
+                            ),
+                          ),
+                          DataCell(
+                            PopupMenuButton<String>(
+                              icon: const Icon(
+                                Icons.more_vert_rounded,
+                                size: 18,
+                              ),
+                              onSelected: (role) {
+                                FirestoreService.instance.updateUserRole(
+                                  u.uid,
+                                  role,
+                                );
+                              },
+                              itemBuilder: (_) => [
+                                const PopupMenuItem(
+                                  value: 'user',
+                                  child: Text('Set User'),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'volunteer',
+                                  child: Text('Set Volunteer'),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'admin',
+                                  child: Text('Set Admin'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
                     }).toList(),
                   ),
                 );

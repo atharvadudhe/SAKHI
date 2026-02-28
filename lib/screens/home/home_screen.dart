@@ -1,18 +1,18 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../config/theme.dart';
 import '../../config/constants.dart';
 import '../../models/session_model.dart';
+import '../../models/location_share_alert_model.dart';
 import '../../providers/providers.dart';
 import '../../services/firestore_service.dart';
 import '../../services/location_service.dart';
 import '../../widgets/sos_button.dart';
-import '../../widgets/session_status_card.dart';
+import '../../widgets/sakhi_brand_logo.dart';
 import '../../models/broadcast_model.dart';
 import '../../services/hardware_trigger_service.dart';
 import '../../services/evidence_service.dart';
@@ -29,20 +29,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   late final AnimationController _fadeController;
   late final Animation<double> _fadeAnim;
 
-  // ── Rotating Safety Tips ──
-  static const _safetyTips = [
-    'Start a safety session before travelling alone at night. A volunteer buddy can monitor your journey.',
-    'Share your live location with trusted contacts when heading to an unfamiliar area.',
-    'Save at least 3 emergency contacts so SOS alerts reach the right people instantly.',
-    'Keep your phone charged above 20% when going out — your safety tools depend on it.',
-    'Trust your instincts. If a place feels unsafe, broadcast a community alert to warn others.',
-    'Walk in well-lit, populated areas whenever possible and stay aware of your surroundings.',
-    'Use the volunteer mode to help others — safety is a community effort!',
-    'Review your emergency contacts regularly to keep numbers up to date.',
-  ];
-  int _tipIndex = 0;
-  late final Timer _tipTimer;
-
   @override
   void initState() {
     super.initState();
@@ -51,13 +37,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       duration: const Duration(milliseconds: 600),
     )..forward();
     _fadeAnim = CurvedAnimation(parent: _fadeController, curve: Curves.easeOut);
-
-    // Rotate safety tip every 10 seconds
-    _tipTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (mounted) {
-        setState(() => _tipIndex = (_tipIndex + 1) % _safetyTips.length);
-      }
-    });
 
     // Wire hardware-trigger SOS to the same SOS handler used by the button
     HardwareTriggerService.instance.onSOSTriggered = () {
@@ -70,7 +49,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   @override
   void dispose() {
-    _tipTimer.cancel();
     _fadeController.dispose();
     HardwareTriggerService.instance.onSOSTriggered = null;
     super.dispose();
@@ -78,37 +56,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: _mainBody(),
-    );
+    return Scaffold(body: _mainBody());
   }
 
   Future<void> _startSession() async {
-    final uid = ref.read(authStateProvider).value?.uid;
-    if (uid == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please log in to start a session'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-      return;
-    }
-
-    final controller = ref.read(sessionControllerProvider.notifier);
-    final session = await controller.startSession();
-    if (session != null && mounted) {
-      context.push('/session');
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not start session. Check location permissions.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    }
+    if (!mounted) return;
+    context.push('/walking-buddy/search-destination');
   }
 
   Future<void> _triggerSOS() async {
@@ -121,11 +74,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
       // Start covert evidence recording — await and handle errors.
       try {
-        final started = await EvidenceService.instance.startCovertRecording(session.sessionId);
+        final started = await EvidenceService.instance.startCovertRecording(
+          session.sessionId,
+        );
         if (!started && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Covert recording could not start. Check microphone permissions.'),
+              content: Text(
+                'Covert recording could not start. Check microphone permissions.',
+              ),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -263,19 +220,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               children: [
                 Text(
                   'Schedule Fake Call',
-                  style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: Theme.of(
+                    ctx,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Choose a delay — the fake incoming call will appear after '
                   'the selected time.',
                   style: TextStyle(
-                    color: Theme.of(ctx)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.6),
+                    color: Theme.of(
+                      ctx,
+                    ).colorScheme.onSurface.withValues(alpha: 0.6),
                     fontSize: 13,
                   ),
                 ),
@@ -324,17 +280,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     Future.delayed(delay, () {
       if (!mounted) return;
-      context.push('/fake-call', extra: {
-        'callerName': 'Mom',
-        'callerLabel': 'Mobile',
-      });
+      context.push(
+        '/fake-call',
+        extra: {'callerName': 'Mom', 'callerLabel': 'Mobile'},
+      );
     });
   }
 
   Widget _mainBody() {
-    final userAsync = ref.watch(currentUserProvider);
     final sessionAsync = ref.watch(activeSessionProvider);
     final broadcastsAsync = ref.watch(broadcastsFeedProvider);
+    final incomingLocationAlertsAsync = ref.watch(
+      incomingLocationShareAlertsProvider,
+    );
 
     return FadeTransition(
       opacity: _fadeAnim,
@@ -346,325 +304,224 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               slivers: [
                 // ── App Bar ──
                 SliverAppBar(
-                    floating: true,
-                    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-                    surfaceTintColor: Colors.transparent,
-                    title: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: SakhiTheme.primary.withValues(alpha: 0.1),
-                          ),
-                          child: const Icon(
-                            Icons.shield_rounded,
-                            color: SakhiTheme.primary,
-                            size: 20,
-                          ),
+                  floating: true,
+                  backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                  surfaceTintColor: Colors.transparent,
+                  title: Row(
+                    children: [
+                      const SakhiBrandLogo(size: 40, framed: false),
+                      const SizedBox(width: 10),
+                      const Text(
+                        AppConstants.appName,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 4,
+                          fontSize: 20,
+                          color: SakhiTheme.primary,
                         ),
-                        const SizedBox(width: 10),
-                        const Text(
-                          AppConstants.appName,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 4,
-                            fontSize: 20,
-                            color: SakhiTheme.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    actions: [
-                      IconButton(
-                        icon: const Icon(Icons.notifications_outlined),
-                        onPressed: () => context.push('/notifications'),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.person_outline_rounded),
-                        onPressed: () {
-                          context.push('/profile');
-                        },
                       ),
                     ],
                   ),
-
-                  // ── Body ──
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
-                    sliver: SliverList(
-                      delegate: SliverChildListDelegate([
-                        // Greeting
-                        userAsync.when(
-                          data: (user) => Text(
-                            'Hi, ${user?.name ?? 'there'}! 👋',
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          loading: () => const SizedBox(height: 28),
-                          error: (_, _) => Text(
-                            'Hi there! 👋',
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Stay safe, we\'re always with you.',
-                          style: TextStyle(
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.5),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // ── Status Card ──
-                        sessionAsync.when(
-                          data: (session) =>
-                              SessionStatusCard(session: session),
-                          loading: () => const SessionStatusCard(),
-                          error: (_, _) => const SessionStatusCard(),
-                        ),
-                        const SizedBox(height: 28),
-
-                        // ── Primary Action ──
-                        _PrimaryCTA(
-                          session: sessionAsync.value,
-                          onStart: _startSession,
-                          onViewSession: () => context.push('/session'),
-                        ),
-                        const SizedBox(height: 24),
-
-                        // ── Quick Actions Grid ──
-                        Text(
-                          'Quick Actions',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: Theme.of(
-                              context,
-                            ).colorScheme.onSurface.withValues(alpha: 0.8),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        GridView.count(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
-                          childAspectRatio: 1.5,
-                          children: [
-                            _QuickActionCard(
-                              icon: Icons.location_on_rounded,
-                              title: 'Share Location',
-                              subtitle: 'Time-bound sharing',
-                              color: SakhiTheme.connected,
-                              onTap: () => context.push('/location-sharing'),
-                            ),
-                            _QuickActionCard(
-                              icon: Icons.campaign_rounded,
-                              title: 'Community Alert',
-                              subtitle: 'Broadcast nearby',
-                              color: SakhiTheme.searching,
-                              onTap: () => context.push('/broadcast'),
-                            ),
-                            _QuickActionCard(
-                              icon: Icons.volunteer_activism_rounded,
-                              title: 'Volunteer Mode',
-                              subtitle: 'Help others',
-                              color: SakhiTheme.safe,
-                              onTap: () => context.push('/volunteer'),
-                            ),
-                            _QuickActionCard(
-                              icon: Icons.contacts_rounded,
-                              title: 'Emergency\nContacts',
-                              subtitle: 'Manage contacts',
-                              color: SakhiTheme.danger,
-                              onTap: () => context.push('/emergency-contacts'),
-                            ),
-                            _QuickActionCard(
-                              icon: Icons.phone_callback_rounded,
-                              title: 'Fake Call',
-                              subtitle: 'De-escalation tool',
-                              color: SakhiTheme.primaryDark,
-                              onTap: _showFakeCallBottomSheet,
-                            ),
-                            _QuickActionCard(
-                              icon: Icons.directions_walk_rounded,
-                              title: 'Walk With Me',
-                              subtitle: 'Virtual companion',
-                              color: SakhiTheme.connected,
-                              onTap: () =>
-                                  context.push('/virtual-companion-setup'),
-                            ),
-                            _QuickActionCard(
-                              icon: Icons.favorite_rounded,
-                              title: 'Internal\nHeartbeat',
-                              subtitle: 'Timed check-ins',
-                              color: Colors.pink.shade600,
-                              onTap: () =>
-                                  context.push('/internal-heartbeat'),
-                            ),
-                            _QuickActionCard(
-                              icon: Icons.masks_rounded,
-                              title: 'Camouflage\nMode',
-                              subtitle: 'Disguise app icon',
-                              color: const Color(0xFF7B1FA2),
-                              onTap: () =>
-                                  context.push('/camouflage'),
-                            ),
-                            _QuickActionCard(
-                              icon: Icons.people_rounded,
-                              title: 'Walking\nBuddy',
-                              subtitle: 'Find a buddy',
-                              color: Colors.teal,
-                              onTap: () =>
-                                  context.push('/walking-buddy/search-destination'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 28),
-
-                        // ── Safety Tips ──
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            gradient: LinearGradient(
-                              colors: [
-                                SakhiTheme.primary.withValues(alpha: 0.05),
-                                SakhiTheme.primary.withValues(alpha: 0.02),
-                              ],
-                            ),
-                            border: Border.all(
-                              color: SakhiTheme.primary.withValues(alpha: 0.1),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.lightbulb_outline_rounded,
-                                color: SakhiTheme.primary.withValues(
-                                  alpha: 0.7,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Safety Tip',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    AnimatedSwitcher(
-                                      duration: const Duration(
-                                        milliseconds: 500,
-                                      ),
-                                      child: Text(
-                                        _safetyTips[_tipIndex],
-                                        key: ValueKey<int>(_tipIndex),
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurface
-                                              .withValues(alpha: 0.6),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 28),
-
-                        // ── Nearby Alert Feed ──
-                        Text(
-                          'Nearby Alerts',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.8),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        broadcastsAsync.when(
-                          data: (broadcasts) {
-                            if (broadcasts.isEmpty) {
-                              return Container(
-                                padding: const EdgeInsets.all(20),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(16),
-                                  color: Theme.of(context).cardTheme.color ??
-                                      Theme.of(context).colorScheme.surface,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.check_circle_outline_rounded,
-                                      color: SakhiTheme.safe,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        'No active alerts nearby. Your area looks safe!',
-                                        style: TextStyle(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurface
-                                              .withValues(alpha: 0.6),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
-                            // Show latest 3 alerts
-                            final recent = broadcasts.take(3).toList();
-                            return Column(
-                              children: recent
-                                  .map((b) => _AlertFeedCard(broadcast: b))
-                                  .toList(),
-                            );
-                          },
-                          loading: () => const SizedBox(
-                            height: 48,
-                            child: Center(
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                          error: (_, _) => const SizedBox.shrink(),
-                        ),
-                      ]),
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.notifications_outlined),
+                      onPressed: () => context.push('/notifications'),
                     ),
-                  ),
-                ],
-              ),
+                    IconButton(
+                      icon: const Icon(Icons.person_outline_rounded),
+                      onPressed: () {
+                        context.push('/profile');
+                      },
+                    ),
+                  ],
+                ),
 
-              // ── Floating SOS Button ──
-              Positioned(
-                bottom: 32,
-                left: 0,
-                right: 0,
-                child: Center(child: SOSButton(onTriggered: _triggerSOS)),
-              ),
-            ],
-          ),
+                // ── Body ──
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      // ── Primary Action ──
+                      _PrimaryCTA(
+                        session: sessionAsync.value,
+                        onStart: _startSession,
+                        onViewSession: () => context.push('/session'),
+                      ),
+                      const SizedBox(height: 12),
+                      incomingLocationAlertsAsync.when(
+                        data: (alerts) {
+                          final activeAlerts = alerts
+                              .where((a) => a.isActive && !a.isExpired)
+                              .toList();
+                          if (activeAlerts.isEmpty) {
+                            return const SizedBox.shrink();
+                          }
+                          return _IncomingLocationAlerts(alerts: activeAlerts);
+                        },
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, _) => const SizedBox.shrink(),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // ── Quick Actions Grid ──
+                      Text(
+                        'Quick Actions',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.8),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      GridView.count(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                        childAspectRatio: 1.5,
+                        children: [
+                          _QuickActionCard(
+                            icon: Icons.location_on_rounded,
+                            title: 'Share Location',
+                            subtitle: 'Time-bound sharing',
+                            color: SakhiTheme.connected,
+                            onTap: () => context.push('/location-sharing'),
+                          ),
+                          _QuickActionCard(
+                            icon: Icons.campaign_rounded,
+                            title: 'Community Alert',
+                            subtitle: 'Broadcast nearby',
+                            color: SakhiTheme.searching,
+                            onTap: () => context.push('/broadcast'),
+                          ),
+                          _QuickActionCard(
+                            icon: Icons.volunteer_activism_rounded,
+                            title: 'Volunteer Mode',
+                            subtitle: 'Help others',
+                            color: SakhiTheme.safe,
+                            onTap: () => context.push('/volunteer'),
+                          ),
+                          _QuickActionCard(
+                            icon: Icons.contacts_rounded,
+                            title: 'Emergency\nContacts',
+                            subtitle: 'Manage contacts',
+                            color: SakhiTheme.danger,
+                            onTap: () => context.push('/emergency-contacts'),
+                          ),
+                          _QuickActionCard(
+                            icon: Icons.phone_callback_rounded,
+                            title: 'Fake Call',
+                            subtitle: 'De-escalation tool',
+                            color: SakhiTheme.primaryDark,
+                            onTap: _showFakeCallBottomSheet,
+                          ),
+                          _QuickActionCard(
+                            icon: Icons.directions_walk_rounded,
+                            title: 'Walk With Me',
+                            subtitle: 'Virtual companion',
+                            color: SakhiTheme.connected,
+                            onTap: () =>
+                                context.push('/virtual-companion-setup'),
+                          ),
+                          _QuickActionCard(
+                            icon: Icons.favorite_rounded,
+                            title: 'Internal\nHeartbeat',
+                            subtitle: 'Timed check-ins',
+                            color: Colors.pink.shade600,
+                            onTap: () => context.push('/internal-heartbeat'),
+                          ),
+                          _QuickActionCard(
+                            icon: Icons.masks_rounded,
+                            title: 'Camouflage\nMode',
+                            subtitle: 'Disguise app icon',
+                            color: const Color(0xFF7B1FA2),
+                            onTap: () => context.push('/camouflage'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 28),
+
+                      // ── Nearby Alert Feed ──
+                      Text(
+                        'Nearby Alerts',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.8),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      broadcastsAsync.when(
+                        data: (broadcasts) {
+                          if (broadcasts.isEmpty) {
+                            return Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                color:
+                                    Theme.of(context).cardTheme.color ??
+                                    Theme.of(context).colorScheme.surface,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.check_circle_outline_rounded,
+                                    color: SakhiTheme.safe,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'No active alerts nearby. Your area looks safe!',
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface
+                                            .withValues(alpha: 0.6),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+                          // Show latest 3 alerts
+                          final recent = broadcasts.take(3).toList();
+                          return Column(
+                            children: recent
+                                .map((b) => _AlertFeedCard(broadcast: b))
+                                .toList(),
+                          );
+                        },
+                        loading: () => const SizedBox(
+                          height: 48,
+                          child: Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                        error: (_, _) => const SizedBox.shrink(),
+                      ),
+                    ]),
+                  ),
+                ),
+              ],
+            ),
+
+            // ── Floating SOS Button ──
+            Positioned(
+              bottom: 32,
+              left: 0,
+              right: 0,
+              child: Center(child: SOSButton(onTriggered: _triggerSOS)),
+            ),
+          ],
         ),
-      );
+      ),
+    );
   }
 }
 
@@ -844,6 +701,117 @@ class _QuickActionCard extends StatelessWidget {
   }
 }
 
+class _IncomingLocationAlerts extends StatelessWidget {
+  final List<LocationShareAlertModel> alerts;
+
+  const _IncomingLocationAlerts({required this.alerts});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: SakhiTheme.connected.withValues(alpha: 0.08),
+        border: Border.all(
+          color: SakhiTheme.connected.withValues(alpha: 0.25),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(
+                Icons.share_location_rounded,
+                color: SakhiTheme.connected,
+                size: 18,
+              ),
+              SizedBox(width: 8),
+              Text(
+                'Live Location Alerts',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...alerts.take(3).map((alert) => _IncomingAlertCard(alert: alert)),
+        ],
+      ),
+    );
+  }
+}
+
+class _IncomingAlertCard extends StatelessWidget {
+  final LocationShareAlertModel alert;
+
+  const _IncomingAlertCard({required this.alert});
+
+  Future<void> _call(String phone) async {
+    final normalized = phone.replaceAll(RegExp(r'[^\d+]'), '');
+    if (normalized.isEmpty) return;
+    await launchUrlString('tel:$normalized');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: Colors.white,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${alert.senderName} shared live location',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () {
+                      context.push(
+                        '/location-sharing/view',
+                        extra: {
+                          'shareId': alert.shareId,
+                          'senderName': alert.senderName,
+                          'senderPhone': alert.senderPhone,
+                        },
+                      );
+                    },
+                    icon: const Icon(Icons.visibility_rounded),
+                    label: const Text('View'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _call(alert.senderPhone),
+                    icon: const Icon(Icons.call_rounded),
+                    label: const Text('Call'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: SakhiTheme.danger,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ── Alert Feed Card ──
 class _AlertFeedCard extends StatelessWidget {
   final BroadcastModel broadcast;
@@ -884,11 +852,10 @@ class _AlertFeedCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          color: Theme.of(context).cardTheme.color ??
+          color:
+              Theme.of(context).cardTheme.color ??
               Theme.of(context).colorScheme.surface,
-          border: Border.all(
-            color: _alertColor.withValues(alpha: 0.2),
-          ),
+          border: Border.all(color: _alertColor.withValues(alpha: 0.2)),
         ),
         child: Row(
           children: [
@@ -921,10 +888,9 @@ class _AlertFeedCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 12,
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withValues(alpha: 0.6),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.6),
                     ),
                   ),
                 ],
@@ -935,10 +901,9 @@ class _AlertFeedCard extends StatelessWidget {
               broadcast.timeAgo,
               style: TextStyle(
                 fontSize: 11,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.4),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.4),
               ),
             ),
           ],

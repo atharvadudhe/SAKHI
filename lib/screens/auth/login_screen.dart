@@ -1,9 +1,12 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/auth_service.dart';
 import '../../config/theme.dart';
+import '../../widgets/sakhi_brand_logo.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,24 +15,40 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   final _phoneController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
   final String _countryCode = '+91';
+  String? _phoneError;
+  late final AnimationController _shakeController;
+
+  @override
+  void initState() {
+    super.initState();
+    _shakeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    );
+  }
 
   @override
   void dispose() {
     _phoneController.dispose();
+    _shakeController.dispose();
     super.dispose();
   }
 
   Future<void> _sendOTP() async {
-    if (!_formKey.currentState!.validate()) return;
+    final phoneInput = _phoneController.text.trim();
+    if (phoneInput.length != 10) {
+      _triggerPhoneError('Enter a valid 10-digit number');
+      return;
+    }
 
     setState(() => _isLoading = true);
 
-    final phoneNumber = '$_countryCode${_phoneController.text.trim()}';
+    final phoneNumber = '$_countryCode$phoneInput';
 
     try {
       await AuthService.instance.verifyPhoneNumber(
@@ -75,6 +94,14 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  void _triggerPhoneError(String message) {
+    setState(() {
+      _phoneError = message;
+    });
+    HapticFeedback.vibrate();
+    _shakeController.forward(from: 0);
+  }
+
   void _showError(String message) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -90,185 +117,188 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 60),
-                // Logo
-                Center(
-                  child: Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: SakhiTheme.primary.withValues(alpha: 0.1),
-                    ),
-                    child: const Icon(
-                      Icons.shield_rounded,
-                      size: 40,
-                      color: SakhiTheme.primary,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Center(
-                  child: Text(
-                    'SAKHI',
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 8,
-                      color: SakhiTheme.primary,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 48),
-                // Welcome text
-                Text(
-                  'Welcome',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Enter your phone number to get started with your safety companion.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.6),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                // Phone number input
-                Text(
-                  'Phone Number',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    // Country code
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 16,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: Text(
-                        _countryCode,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    // Phone field
-                    Expanded(
-                      child: TextFormField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(10),
-                        ],
-                        decoration: const InputDecoration(
-                          hintText: 'Enter phone number',
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().length < 10) {
-                            return 'Enter a valid 10-digit number';
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 32),
-                // Continue button
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _sendOTP,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: SakhiTheme.primary,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Logo
+                          const Center(
+                            child: SakhiBrandLogo(size: 86, elevated: true),
                           ),
-                        )
-                      : const Text('Continue'),
-                ),
-                const SizedBox(height: 16),
-
-                // ── OR divider ──
-                Row(
-                  children: [
-                    Expanded(child: Divider(color: Colors.grey.shade300)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'OR',
-                        style: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontWeight: FontWeight.w500,
-                        ),
+                          const SizedBox(height: 16),
+                          const Center(
+                            child: Text(
+                              'SAKHI',
+                              style: TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 8,
+                                color: SakhiTheme.primary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 36),
+                          // Welcome text
+                          Text(
+                            'Welcome',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.headlineMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Enter your phone number to get started with your safety companion.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurface
+                                      .withValues(alpha: 0.6),
+                                ),
+                          ),
+                          const SizedBox(height: 32),
+                          // Phone number input
+                          Text(
+                            'Phone Number',
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 8),
+                          AnimatedBuilder(
+                            animation: _shakeController,
+                            builder: (context, child) {
+                              final value = _shakeController.value;
+                              final dx =
+                                  math.sin(value * math.pi * 8) *
+                                  (1 - value) *
+                                  12;
+                              return Transform.translate(
+                                offset: Offset(dx, 0),
+                                child: child,
+                              );
+                            },
+                            child: Row(
+                              children: [
+                                // Country code
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 16,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: _phoneError == null
+                                          ? Colors.grey.shade300
+                                          : SakhiTheme.danger,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _countryCode,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                // Phone field
+                                Expanded(
+                                  child: TextField(
+                                    controller: _phoneController,
+                                    keyboardType: TextInputType.phone,
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                      LengthLimitingTextInputFormatter(10),
+                                    ],
+                                    decoration: InputDecoration(
+                                      hintText: 'Enter phone number',
+                                      errorText: null,
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide(
+                                          color: _phoneError == null
+                                              ? Colors.grey.shade300
+                                              : SakhiTheme.danger,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide(
+                                          color: _phoneError == null
+                                              ? SakhiTheme.primary
+                                              : SakhiTheme.danger,
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                    onChanged: (_) {
+                                      if (_phoneError != null) {
+                                        setState(() => _phoneError = null);
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 180),
+                            curve: Curves.easeOut,
+                            child: _phoneError == null
+                                ? const SizedBox(height: 0)
+                                : Padding(
+                                    padding: const EdgeInsets.only(
+                                      top: 8,
+                                      left: 2,
+                                    ),
+                                    child: Text(
+                                      _phoneError!,
+                                      style: const TextStyle(
+                                        color: SakhiTheme.danger,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                          const SizedBox(height: 32),
+                          // Continue button
+                          ElevatedButton(
+                            onPressed: _isLoading ? null : _sendOTP,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: SakhiTheme.primary,
+                              foregroundColor: Colors.white,
+                            ),
+                            child: _isLoading
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('Continue'),
+                          ),
+                        ],
                       ),
-                    ),
-                    Expanded(child: Divider(color: Colors.grey.shade300)),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // ── Email sign-in button ──
-                OutlinedButton.icon(
-                  onPressed: () => context.push('/email-login'),
-                  icon: const Icon(Icons.email_outlined),
-                  label: const Text('Sign in with Email'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: SakhiTheme.primary,
-                    side: const BorderSide(color: SakhiTheme.primary),
-                    minimumSize: const Size.fromHeight(52),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                 ),
-                const SizedBox(height: 12),
-
-                // Skip for testing
-                Center(
-                  child: TextButton(
-                    onPressed: () => context.go('/home'),
-                    child: Text(
-                      'Skip for now (Demo)',
-                      style: TextStyle(
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.5),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         ),
       ),
     );

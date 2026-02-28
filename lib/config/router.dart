@@ -15,6 +15,7 @@ import '../screens/broadcast/broadcast_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/contacts/emergency_contacts_screen.dart';
 import '../screens/location/location_sharing_screen.dart';
+import '../screens/location/location_share_view_screen.dart';
 import '../screens/notifications/notifications_screen.dart';
 import '../screens/admin/admin_dashboard_screen.dart';
 import '../screens/safety_tools/fake_call_screen.dart';
@@ -117,6 +118,25 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/location-sharing',
       builder: (context, state) => const LocationSharingScreen(),
+    ),
+    GoRoute(
+      path: '/location-sharing/view',
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>? ?? {};
+        final shareId = extra['shareId'] as String?;
+        final senderName = extra['senderName'] as String? ?? 'Contact';
+        final senderPhone = extra['senderPhone'] as String? ?? '';
+        if (shareId == null || shareId.isEmpty) {
+          return const Scaffold(
+            body: Center(child: Text('No share ID provided')),
+          );
+        }
+        return LocationShareViewScreen(
+          shareId: shareId,
+          senderName: senderName,
+          senderPhone: senderPhone,
+        );
+      },
     ),
     GoRoute(
       path: '/notifications',

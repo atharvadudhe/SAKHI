@@ -86,14 +86,46 @@ service cloud.firestore {
 
     // ── Location Shares Collection ──
     match /locationShares/{shareId} {
-      allow read: if isAuthenticated();
+      allow read: if isAdmin()
+                  || (
+                    isAuthenticated()
+                    && (
+                      resource.data.uid == request.auth.uid
+                      || (
+                        resource.data.recipientUids is list
+                        && request.auth.uid in resource.data.recipientUids
+                      )
+                    )
+                  );
       allow create: if isAuthenticated()
-                    && request.resource.data.uid == request.auth.uid;
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.recipientUids is list;
       allow update: if isAdmin()
                     || (
                       isAuthenticated()
                       && resource.data.uid == request.auth.uid
                       && request.resource.data.uid == resource.data.uid
+                    );
+      allow delete: if isAdmin();
+    }
+
+    // ── Location Share Alerts Collection ──
+    match /locationShareAlerts/{alertId} {
+      allow read: if isAdmin()
+                  || (
+                    isAuthenticated()
+                    && (
+                      resource.data.recipientUid == request.auth.uid
+                      || resource.data.senderUid == request.auth.uid
+                    )
+                  );
+      allow create: if isAuthenticated()
+                    && request.resource.data.senderUid == request.auth.uid;
+      allow update: if isAdmin()
+                    || (
+                      isAuthenticated()
+                      && resource.data.senderUid == request.auth.uid
+                      && request.resource.data.senderUid == resource.data.senderUid
                     );
       allow delete: if isAdmin();
     }

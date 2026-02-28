@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:async';
@@ -12,6 +13,7 @@ import '../../config/theme.dart';
 import '../../models/walking_buddy_models.dart';
 import '../../providers/walking_buddy_providers.dart';
 import '../../providers/providers.dart';
+import '../../services/firestore_service.dart';
 
 /// Screen for confirming and adjusting user location before creating a session
 class LocationConfirmationScreen extends ConsumerStatefulWidget {
@@ -131,12 +133,23 @@ class _LocationConfirmationScreenState
     setState(() => _isLoading = true);
 
     try {
-      final authState = ref.read(authStateProvider);
-      final currentUser = ref.read(currentUserProvider).value;
-
-      if (authState.value == null || currentUser == null) {
+      final authUser = FirebaseAuth.instance.currentUser;
+      if (authUser == null) {
         throw Exception('User not authenticated');
       }
+
+      final providerUser = ref.read(currentUserProvider).value;
+      final currentUser =
+          providerUser ?? await FirestoreService.instance.getUser(authUser.uid);
+      final userName = (currentUser?.name.trim().isNotEmpty ?? false)
+          ? currentUser!.name
+          : ((authUser.displayName?.trim().isNotEmpty ?? false)
+              ? authUser.displayName!
+              : 'Sakhi User');
+      final userPhone = (currentUser?.phone.trim().isNotEmpty ?? false)
+          ? currentUser!.phone
+          : (authUser.phoneNumber ?? '');
+      final userPhotoUrl = currentUser?.photoUrl ?? authUser.photoURL;
 
       // Create GeoPoints from locations
       final userGeoPoint = GeoPoint(
@@ -158,10 +171,10 @@ class _LocationConfirmationScreenState
       // Create the walking session
       final controller = ref.read(walkingBuddyControllerProvider.notifier);
       final sessionId = await controller.createWalkingSession(
-        userId: authState.value!.uid,
-        userName: currentUser.name,
-        userPhone: currentUser.phone,
-        userPhotoUrl: currentUser.photoUrl,
+        userId: authUser.uid,
+        userName: userName,
+        userPhone: userPhone,
+        userPhotoUrl: userPhotoUrl,
         userLocation: userGeoPoint,
         destinationLocation: destGeoPoint,
         destinationName: widget.destination.name,

@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../config/theme.dart';
+import '../../models/emergency_contact.dart';
 import '../../providers/providers.dart';
 import '../../services/firestore_service.dart';
 import '../../services/location_service.dart';
@@ -22,7 +23,9 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
   int _selectedDuration = 30; // minutes
   bool _isSharing = false;
   String? _activeShareId;
+  int _sharedWithCount = 0;
   Timer? _expiryTimer;
+  final Set<String> _selectedContactIds = <String>{};
 
   final _durations = [15, 30, 60, 120];
 
@@ -37,7 +40,16 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
     super.dispose();
   }
 
-  Future<void> _startSharing() async {
+  Future<void> _startSharing(List<EmergencyContact> contacts) async {
+    final selectedContacts = contacts.where((c) {
+      final key = c.id.isNotEmpty ? c.id : c.phone;
+      return _selectedContactIds.contains(key);
+    }).toList();
+    if (selectedContacts.isEmpty) {
+      _showError('Select at least one emergency contact to share with.');
+      return;
+    }
+
     setState(() => _isSharing = true);
 
     try {
@@ -73,10 +85,37 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
 
       final user = ref.read(currentUserProvider).value;
       final userName = user?.name ?? 'Unknown';
+      final senderPhone = (user?.phone.trim().isNotEmpty ?? false)
+          ? user!.phone
+          : '';
+
+      final recipientUsers = await FirestoreService.instance.getUsersByPhones(
+        selectedContacts.map((c) => c.phone).toList(),
+      );
+      final recipientUids = recipientUsers
+          .map((u) => u.uid)
+          .where((id) => id != uid)
+          .toSet()
+          .toList();
+      final recipientPhones = recipientUsers
+          .where((u) => u.uid != uid)
+          .map((u) => u.phone)
+          .toList();
+
+      if (recipientUids.isEmpty) {
+        setState(() => _isSharing = false);
+        _showError(
+          'Selected contacts are not registered on SAKHI yet.',
+        );
+        return;
+      }
 
       final shareId = await FirestoreService.instance.createLocationShare(
         uid: uid,
         userName: userName,
+        senderPhone: senderPhone,
+        recipientUids: recipientUids,
+        recipientPhones: recipientPhones,
         location: GeoPoint(position.latitude, position.longitude),
         durationMinutes: _selectedDuration,
       );
@@ -84,6 +123,7 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
 
       setState(() {
         _activeShareId = shareId;
+        _sharedWithCount = recipientUids.length;
       });
 
       // Start updating location on the share
@@ -101,7 +141,7 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
             );
           }
         },
-        intervalSeconds: 10,
+        intervalSeconds: 30,
       );
 
       // Set expiry timer
@@ -111,9 +151,15 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
       });
 
       if (mounted) {
+        final unmatchedCount = selectedContacts.length - recipientUids.length;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Location sharing started!'),
+          SnackBar(
+            content: Text(
+              unmatchedCount > 0
+                  ? 'Sharing started with $recipientUids.length contact(s). '
+                      '$unmatchedCount not on SAKHI.'
+                  : 'Location sharing started with $recipientUids.length contact(s)!',
+            ),
             backgroundColor: SakhiTheme.safe,
             behavior: SnackBarBehavior.floating,
           ),
@@ -180,6 +226,7 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
       setState(() {
         _activeShareId = null;
         _isSharing = false;
+        _sharedWithCount = 0;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -192,6 +239,8 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final contactsAsync = ref.watch(emergencyContactsProvider);
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -255,6 +304,7 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
                 // Active sharing UI
                 _ActiveSharingCard(
                   duration: _selectedDuration,
+                  sharedWithCount: _sharedWithCount,
                   onStop: _stopSharing,
                 ),
               ] else ...[
@@ -301,6 +351,76 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
                 ),
                 const SizedBox(height: 28),
 
+                const Text(
+                  'Select Contacts',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                ),
+                const SizedBox(height: 12),
+                contactsAsync.when(
+                  data: (contacts) {
+                    if (contacts.isEmpty) {
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.orange.withValues(alpha: 0.08),
+                          border: Border.all(
+                            color: Colors.orange.withValues(alpha: 0.35),
+                          ),
+                        ),
+                        child: const Text(
+                          'No emergency contacts found. Add contacts first.',
+                        ),
+                      );
+                    }
+
+                    return Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Column(
+                        children: contacts.map((contact) {
+                          final key =
+                              contact.id.isNotEmpty ? contact.id : contact.phone;
+                          final selected = _selectedContactIds.contains(key);
+                          return CheckboxListTile(
+                            value: selected,
+                            title: Text(contact.name),
+                            subtitle: Text(contact.phone),
+                            controlAffinity: ListTileControlAffinity.leading,
+                            dense: true,
+                            onChanged: (value) {
+                              setState(() {
+                                if (value ?? false) {
+                                  _selectedContactIds.add(key);
+                                } else {
+                                  _selectedContactIds.remove(key);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    );
+                  },
+                  loading: () => const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  error: (_, _) => Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      color: SakhiTheme.danger.withValues(alpha: 0.08),
+                    ),
+                    child: const Text('Could not load contacts.'),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
                 // What happens
                 Container(
                   padding: const EdgeInsets.all(16),
@@ -327,6 +447,9 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
                         text: 'Emergency contacts can see your position',
                       ),
                       const _BulletItem(
+                        text: 'Location refreshes every 30 seconds',
+                      ),
+                      const _BulletItem(
                         text: 'Sharing stops automatically when time expires',
                       ),
                       const _BulletItem(
@@ -339,7 +462,9 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
 
                 // Start button
                 ElevatedButton.icon(
-                  onPressed: _isSharing ? null : _startSharing,
+                  onPressed: _isSharing
+                      ? null
+                      : () => _startSharing(contactsAsync.value ?? const []),
                   icon: _isSharing
                       ? const SizedBox(
                           width: 18,
@@ -367,9 +492,14 @@ class _LocationSharingScreenState extends ConsumerState<LocationSharingScreen> {
 
 class _ActiveSharingCard extends StatefulWidget {
   final int duration;
+  final int sharedWithCount;
   final VoidCallback onStop;
 
-  const _ActiveSharingCard({required this.duration, required this.onStop});
+  const _ActiveSharingCard({
+    required this.duration,
+    required this.sharedWithCount,
+    required this.onStop,
+  });
 
   @override
   State<_ActiveSharingCard> createState() => _ActiveSharingCardState();
@@ -434,7 +564,7 @@ class _ActiveSharingCardState extends State<_ActiveSharingCard> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Your contacts can see your location',
+            'Shared with ${widget.sharedWithCount} contact(s)',
             style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 24),
