@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 import 'dart:math' as math;
 
 import '../../config/theme.dart';
 import '../../models/walking_buddy_models.dart';
 import '../../providers/walking_buddy_providers.dart';
 import '../../providers/providers.dart';
+import '../../services/firestore_service.dart';
+import '../../services/walking_request_service.dart';
 import '../../widgets/walking_buddy_widgets.dart';
 
 /// Volunteer dashboard showing available walking buddy requests
@@ -147,14 +151,15 @@ class _VolunteerDashboardWalkingBuddyScreenState extends ConsumerState<Volunteer
         distanceFromUser: distance,
       );
 
-      if (success && mounted) {
+      if (success) {
+        if (!context.mounted) return;
         context.push(
           '/walking-buddy/volunteer-active',
           extra: session.sessionId,
         );
       }
     } catch (e) {
-      if (mounted) {
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error: $e')),
         );
@@ -233,7 +238,7 @@ class _WalkingBuddyRequestCard extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: SakhiTheme.searching.withOpacity(0.1),
+                      color: SakhiTheme.searching.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -324,6 +329,7 @@ class VolunteerActiveSessionScreen extends ConsumerStatefulWidget {
 class _VolunteerActiveSessionScreenState
     extends ConsumerState<VolunteerActiveSessionScreen> {
   late GoogleMapController _mapController;
+  bool _hasLaunchedMaps = false;
 
   @override
   void dispose() {
@@ -333,7 +339,9 @@ class _VolunteerActiveSessionScreenState
 
   @override
   Widget build(BuildContext context) {
-    final sessionAsync = ref.watch(walkingSessionProvider(widget.sessionId));
+    final sessionAsync = ref.watch(
+      walkingSessionStreamProvider(widget.sessionId),
+    );
 
     return sessionAsync.when(
       loading: () => Scaffold(
@@ -352,9 +360,33 @@ class _VolunteerActiveSessionScreenState
           );
         }
 
+        _maybeLaunchGoogleMaps(session);
         return _buildVolunteerUI(context, session);
       },
     );
+  }
+
+  Future<void> _maybeLaunchGoogleMaps(WalkingSessionModel session) async {
+    if (_hasLaunchedMaps || session.status != WalkingSessionStatus.userConfirmed) {
+      return;
+    }
+
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      await FirestoreService.instance.openGoogleMapsNavigation(
+        volunteerLat: position.latitude,
+        volunteerLng: position.longitude,
+        userLat: session.userLocation.latitude,
+        userLng: session.userLocation.longitude,
+      );
+      _hasLaunchedMaps = true;
+    } catch (_) {
+      // ignore external maps launch failures
+    }
   }
 
   Widget _buildVolunteerUI(
@@ -373,7 +405,11 @@ class _VolunteerActiveSessionScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Heading to User'),
+        title: Text(
+          session.status == WalkingSessionStatus.userConfirmed
+              ? 'Heading to User'
+              : 'Waiting for User Confirmation',
+        ),
       ),
       body: Stack(
         children: [
@@ -449,26 +485,34 @@ class _VolunteerActiveSessionScreenState
                         ),
                         IconButton(
                           icon: const Icon(Icons.call),
-                          onPressed: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Calling user...'),
-                              ),
-                            );
-                          },
+                          onPressed: () => _callUser(context, session),
                         ),
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                SwipeActionButton(
-                  label: 'I\'ve Arrived',
-                  icon: Icons.location_on,
-                  onSwipeComplete: () {
-                    _confirmArrival(context, session);
-                  },
-                ),
+                if (session.status == WalkingSessionStatus.userConfirmed)
+                  SwipeActionButton(
+                    label: 'I\'ve Arrived',
+                    icon: Icons.location_on,
+                    onSwipeComplete: () {
+                      _confirmArrival(context, session);
+                    },
+                  )
+                else
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: SakhiTheme.searching.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Text(
+                      'Waiting for user to accept your request.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -485,10 +529,42 @@ class _VolunteerActiveSessionScreenState
     final success =
         await controller.volunteerConfirmArrival(widget.sessionId);
 
-    if (success && mounted) {
+    if (success) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Arrival confirmed! Waiting for user...'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _callUser(
+    BuildContext context,
+    WalkingSessionModel session,
+  ) async {
+    final phone = session.userPhone.trim().isEmpty
+        ? '1234567890'
+        : session.userPhone.trim();
+
+    final normalized = phone.replaceAll(RegExp(r'[^\d+]'), '');
+    if (normalized.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invalid user phone number'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final uri = 'tel:$normalized';
+    final launched = await launchUrlString(uri);
+    if (!launched && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open phone dialer'),
           behavior: SnackBarBehavior.floating,
         ),
       );

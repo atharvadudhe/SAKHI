@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 import '../../config/theme.dart';
 import '../../models/walking_buddy_models.dart';
@@ -78,7 +79,9 @@ class _ActiveWalkingSessionScreenState
   @override
   Widget build(BuildContext context) {
     print('🔥 ACTIVE SCREEN: ActiveWalkingSessionScreen');
-    final sessionAsync = ref.watch(walkingSessionProvider(widget.sessionId));
+    final sessionAsync = ref.watch(
+      walkingSessionStreamProvider(widget.sessionId),
+    );
 
     return sessionAsync.when(
       loading: () => Scaffold(
@@ -504,14 +507,35 @@ class _ActiveWalkingSessionScreenState
     );
   }
 
-  void _callVolunteer(BuildContext context, WalkingSessionModel session) {
-    // TODO: Implement call functionality
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Calling ${session.volunteerName}...'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+  Future<void> _callVolunteer(
+    BuildContext context,
+    WalkingSessionModel session,
+  ) async {
+    final phone = (session.volunteerPhone?.trim().isEmpty ?? true)
+        ? '1234567890'
+        : session.volunteerPhone!.trim();
+
+    final normalized = phone.replaceAll(RegExp(r'[^\d+]'), '');
+    if (normalized.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invalid volunteer phone number'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final uri = 'tel:$normalized';
+    final launched = await launchUrlString(uri);
+    if (!launched && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not open phone dialer'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   void _showSessionMenu(BuildContext context, WalkingSessionModel session) {
