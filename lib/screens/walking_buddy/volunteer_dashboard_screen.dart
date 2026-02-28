@@ -330,6 +330,7 @@ class _VolunteerActiveSessionScreenState
     extends ConsumerState<VolunteerActiveSessionScreen> {
   late GoogleMapController _mapController;
   bool _hasLaunchedMaps = false;
+  bool _hasHandledTerminalState = false;
 
   @override
   void dispose() {
@@ -360,10 +361,34 @@ class _VolunteerActiveSessionScreenState
           );
         }
 
+        _handleTerminalState(session);
         _maybeLaunchGoogleMaps(session);
         return _buildVolunteerUI(context, session);
       },
     );
+  }
+
+  void _handleTerminalState(WalkingSessionModel session) {
+    final isTerminal = session.status == WalkingSessionStatus.completed ||
+        session.status == WalkingSessionStatus.cancelled;
+    if (!isTerminal) return;
+    if (_hasHandledTerminalState || !mounted) return;
+    _hasHandledTerminalState = true;
+
+    final message = session.status == WalkingSessionStatus.completed
+        ? 'Session completed successfully. Thank you for supporting Sakhi.'
+        : 'This walking session has ended.';
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      context.go('/home');
+    });
   }
 
   Future<void> _maybeLaunchGoogleMaps(WalkingSessionModel session) async {
@@ -405,11 +430,7 @@ class _VolunteerActiveSessionScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          session.status == WalkingSessionStatus.userConfirmed
-              ? 'Heading to User'
-              : 'Waiting for User Confirmation',
-        ),
+        title: Text(_titleForStatus(session.status)),
       ),
       body: Stack(
         children: [
@@ -476,7 +497,7 @@ class _VolunteerActiveSessionScreenState
                                     ?.copyWith(fontWeight: FontWeight.w600),
                               ),
                               Text(
-                                'Waiting for you',
+                                _statusMessage(session),
                                 style:
                                     Theme.of(context).textTheme.bodySmall,
                               ),
@@ -492,31 +513,83 @@ class _VolunteerActiveSessionScreenState
                   ),
                 ),
                 const SizedBox(height: 12),
-                if (session.status == WalkingSessionStatus.userConfirmed)
-                  SwipeActionButton(
-                    label: 'I\'ve Arrived',
-                    icon: Icons.location_on,
-                    onSwipeComplete: () {
-                      _confirmArrival(context, session);
-                    },
-                  )
-                else
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: SakhiTheme.searching.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      'Waiting for user to accept your request.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
+                _buildVolunteerAction(context, session),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildVolunteerAction(
+    BuildContext context,
+    WalkingSessionModel session,
+  ) {
+    if (session.status == WalkingSessionStatus.userConfirmed) {
+      return SwipeActionButton(
+        label: 'I Have Arrived',
+        icon: Icons.location_on,
+        onSwipeComplete: () => _confirmArrival(context, session),
+      );
+    }
+
+    if (session.status == WalkingSessionStatus.volunteerReached) {
+      if (!session.volunteerConfirmedJourneyStart) {
+        return SwipeActionButton(
+          label: 'Begin Journey',
+          icon: Icons.play_arrow_rounded,
+          onSwipeComplete: () => _confirmJourneyStart(context),
+        );
+      }
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: SakhiTheme.connected.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Text(
+          'Waiting for user to tap Begin Journey.',
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    if (session.status == WalkingSessionStatus.journeyStarted) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: SakhiTheme.safe.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Text(
+          'Journey verified and in progress.',
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
+
+    if (session.status == WalkingSessionStatus.destinationReached) {
+      return SwipeActionButton(
+        label: 'End Session',
+        icon: Icons.check_circle_outline_rounded,
+        backgroundColor: SakhiTheme.safe,
+        onSwipeComplete: () => _completeSession(context),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: SakhiTheme.searching.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Text(
+        'Waiting for user to accept your request.',
+        textAlign: TextAlign.center,
       ),
     );
   }
@@ -533,10 +606,71 @@ class _VolunteerActiveSessionScreenState
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Arrival confirmed! Waiting for user...'),
+          content: Text('Arrival confirmed. Both users can now tap Begin Journey.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
+    }
+  }
+
+  Future<void> _confirmJourneyStart(BuildContext context) async {
+    final controller = ref.read(walkingBuddyControllerProvider.notifier);
+    final success =
+        await controller.startJourney(widget.sessionId, asVolunteer: true);
+    if (!success || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Start confirmation submitted.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _completeSession(BuildContext context) async {
+    final controller = ref.read(walkingBuddyControllerProvider.notifier);
+    final success = await controller.completeWalkingSession(widget.sessionId);
+    if (!success || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Session completed successfully.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _titleForStatus(WalkingSessionStatus status) {
+    switch (status) {
+      case WalkingSessionStatus.userConfirmed:
+        return 'Heading to User';
+      case WalkingSessionStatus.volunteerReached:
+        return 'At User Location';
+      case WalkingSessionStatus.journeyStarted:
+        return 'Journey In Progress';
+      case WalkingSessionStatus.destinationReached:
+        return 'Confirm End Session';
+      case WalkingSessionStatus.completed:
+        return 'Session Completed';
+      default:
+        return 'Waiting for User Confirmation';
+    }
+  }
+
+  String _statusMessage(WalkingSessionModel session) {
+    switch (session.status) {
+      case WalkingSessionStatus.userConfirmed:
+        return 'Navigate and tap I Have Arrived';
+      case WalkingSessionStatus.volunteerReached:
+        return session.volunteerConfirmedJourneyStart
+            ? 'Waiting for user to begin journey'
+            : 'Tap Begin Journey';
+      case WalkingSessionStatus.journeyStarted:
+        return 'Walking with user';
+      case WalkingSessionStatus.destinationReached:
+        return 'User requested end session';
+      case WalkingSessionStatus.completed:
+        return 'Session completed';
+      default:
+        return 'Waiting for you';
     }
   }
 

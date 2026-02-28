@@ -32,6 +32,8 @@ class _ActiveWalkingSessionScreenState
   late GoogleMapController _mapController;
   late StreamSubscription<Position> _locationSubscription;
   late Timer _locationUploadTimer;
+  bool _isTrackingRunning = false;
+  bool _hasHandledTerminalState = false;
 
   @override
   void initState() {
@@ -40,6 +42,7 @@ class _ActiveWalkingSessionScreenState
   }
 
   void _startLocationTracking() {
+    _isTrackingRunning = true;
     // Listen to location updates from Geolocator
     _locationSubscription = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(accuracy: LocationAccuracy.best),
@@ -57,7 +60,15 @@ class _ActiveWalkingSessionScreenState
     });
   }
 
+  void _stopLocationTracking() {
+    if (!_isTrackingRunning) return;
+    _locationSubscription.cancel();
+    _locationUploadTimer.cancel();
+    _isTrackingRunning = false;
+  }
+
   Future<void> _uploadLocation(Position position) async {
+    if (!_isTrackingRunning) return;
     final authState = ref.read(authStateProvider);
     if (authState.value != null) {
       await ref.read(walkingBuddyControllerProvider.notifier).recordLocation(
@@ -70,8 +81,7 @@ class _ActiveWalkingSessionScreenState
 
   @override
   void dispose() {
-    _locationSubscription.cancel();
-    _locationUploadTimer.cancel();
+    _stopLocationTracking();
     _mapController.dispose();
     super.dispose();
   }
@@ -102,9 +112,36 @@ class _ActiveWalkingSessionScreenState
           );
         }
 
+        _handleTerminalState(session);
         return _buildSessionUI(context, session);
       },
     );
+  }
+
+  void _handleTerminalState(WalkingSessionModel session) {
+    final isTerminal = session.status == WalkingSessionStatus.completed ||
+        session.status == WalkingSessionStatus.cancelled;
+    if (!isTerminal) return;
+
+    _stopLocationTracking();
+
+    if (_hasHandledTerminalState || !mounted) return;
+    _hasHandledTerminalState = true;
+
+    final message = session.status == WalkingSessionStatus.completed
+        ? 'Journey completed safely. Thank you for using Sakhi.'
+        : 'This walking session has ended.';
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      context.go('/home');
+    });
   }
 
   Widget _buildSessionUI(BuildContext context, WalkingSessionModel session) {
@@ -336,18 +373,36 @@ class _ActiveWalkingSessionScreenState
 
       case WalkingSessionStatus.volunteerReached:
         buttons.addAll([
-          SwipeActionButton(
-            label: 'Volunteer Reached',
-            icon: Icons.check_circle,
-            onSwipeComplete: () => _startJourney(context, session),
-          ),
+          if (!session.userConfirmedJourneyStart)
+            SwipeActionButton(
+              label: 'Begin Journey',
+              icon: Icons.play_arrow_rounded,
+              onSwipeComplete: () => _startJourney(context, session),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: SakhiTheme.connected.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.hourglass_top_rounded, color: SakhiTheme.connected),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text('Waiting for volunteer to tap Begin Journey.'),
+                  ),
+                ],
+              ),
+            ),
         ]);
         break;
 
       case WalkingSessionStatus.journeyStarted:
         buttons.addAll([
           SwipeActionButton(
-            label: 'Reached Destination',
+            label: 'End Session',
             icon: Icons.location_on,
             backgroundColor: SakhiTheme.safe,
             onSwipeComplete: () =>
@@ -373,14 +428,14 @@ class _ActiveWalkingSessionScreenState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Destination Reached',
+                        'Session End Requested',
                         style: Theme.of(context)
                             .textTheme
                             .titleSmall
                             ?.copyWith(fontWeight: FontWeight.w600),
                       ),
                       Text(
-                        'Waiting for volunteer confirmation...',
+                        'Waiting for volunteer to end the session...',
                         style: Theme.of(context)
                             .textTheme
                             .bodySmall
@@ -399,13 +454,16 @@ class _ActiveWalkingSessionScreenState
         break;
     }
 
-    buttons.add(const SizedBox(height: 12));
-    buttons.add(
-      OutlinedButton(
-        onPressed: () => _cancelSession(context, session),
-        child: const Text('Cancel Session'),
-      ),
-    );
+    if (session.status != WalkingSessionStatus.completed &&
+        session.status != WalkingSessionStatus.cancelled) {
+      buttons.add(const SizedBox(height: 12));
+      buttons.add(
+        OutlinedButton(
+          onPressed: () => _cancelSession(context, session),
+          child: const Text('Cancel Session'),
+        ),
+      );
+    }
 
     return buttons;
   }
@@ -432,12 +490,13 @@ class _ActiveWalkingSessionScreenState
     WalkingSessionModel session,
   ) async {
     final controller = ref.read(walkingBuddyControllerProvider.notifier);
-    final success = await controller.startJourney(widget.sessionId);
+    final success =
+        await controller.startJourney(widget.sessionId, asVolunteer: false);
 
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Journey started!'),
+          content: Text('Start confirmation submitted.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -455,7 +514,7 @@ class _ActiveWalkingSessionScreenState
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Great! You have reached your destination safely.'),
+          content: Text('End request sent. Waiting for volunteer confirmation.'),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -585,13 +644,17 @@ class _ActiveWalkingSessionScreenState
       case WalkingSessionStatus.userConfirmed:
         return 'Waiting for volunteer to arrive at your location...';
       case WalkingSessionStatus.volunteerReached:
-        return 'Volunteer has arrived! Confirm and start your journey.';
+        return 'Volunteer arrived. Both of you must tap Begin Journey.';
       case WalkingSessionStatus.journeyStarted:
-        return 'Journey started. Heading to destination...';
+        return 'Journey verified and active.';
       case WalkingSessionStatus.destinationReached:
-        return 'You are at your destination! Waiting for confirmation...';
-      default:
-        return '';
+        return 'Waiting for volunteer to complete session.';
+      case WalkingSessionStatus.completed:
+        return 'Session completed successfully.';
+      case WalkingSessionStatus.searching:
+        return 'Looking for a volunteer...';
+      case WalkingSessionStatus.cancelled:
+        return 'This session has been cancelled.';
     }
   }
 
