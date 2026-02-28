@@ -22,6 +22,7 @@ import '../screens/safety_tools/virtual_companion_setup.dart';
 import '../screens/safety_tools/active_companion_screen.dart';
 import '../screens/safety_tools/pin_setup_screen.dart';
 import '../screens/safety_tools/camouflage_screen.dart';
+import '../screens/safety_tools/internal_heartbeat_screen.dart';
 import '../screens/profile/volunteer_verification_screen.dart';
 import '../screens/walking_buddy/destination_search_screen.dart';
 import '../screens/walking_buddy/location_confirmation_screen.dart';
@@ -181,6 +182,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/camouflage',
       builder: (context, state) => const CamouflageScreen(),
+    ),
+    GoRoute(
+      path: '/internal-heartbeat',
+      builder: (context, state) => const InternalHeartbeatScreen(),
     ),
 
     // ──────── Walking Buddy Routes ────────
