@@ -10,6 +10,8 @@ class BroadcastModel {
   final DateTime? timestamp;
   final double radiusKm;
   final bool isDuressActive;
+  final bool isActive;
+  final DateTime? cancelledAt;
 
   const BroadcastModel({
     required this.id,
@@ -21,6 +23,8 @@ class BroadcastModel {
     this.timestamp,
     this.radiusKm = 2.0,
     this.isDuressActive = false,
+    this.isActive = true,
+    this.cancelledAt,
   });
 
   factory BroadcastModel.fromJson(Map<String, dynamic> json) {
@@ -30,6 +34,13 @@ class BroadcastModel {
       parsedTimestamp = rawTs.toDate();
     } else if (rawTs is DateTime) {
       parsedTimestamp = rawTs;
+    }
+    final rawCancelledAt = json['cancelledAt'];
+    DateTime? parsedCancelledAt;
+    if (rawCancelledAt is Timestamp) {
+      parsedCancelledAt = rawCancelledAt.toDate();
+    } else if (rawCancelledAt is DateTime) {
+      parsedCancelledAt = rawCancelledAt;
     }
 
     return BroadcastModel(
@@ -42,6 +53,8 @@ class BroadcastModel {
       timestamp: parsedTimestamp,
       radiusKm: (json['radiusKm'] as num?)?.toDouble() ?? 2.0,
       isDuressActive: json['isDuressActive'] as bool? ?? false,
+      isActive: json['isActive'] as bool? ?? true,
+      cancelledAt: parsedCancelledAt,
     );
   }
 
@@ -56,6 +69,8 @@ class BroadcastModel {
     'timestamp': timestamp != null ? Timestamp.fromDate(timestamp!) : null,
     'radiusKm': radiusKm,
     'isDuressActive': isDuressActive,
+    'isActive': isActive,
+    'cancelledAt': cancelledAt != null ? Timestamp.fromDate(cancelledAt!) : null,
   };
 
   /// Firestore-specific map — uses server timestamp when none is set.
@@ -71,6 +86,8 @@ class BroadcastModel {
         : FieldValue.serverTimestamp(),
     'radiusKm': radiusKm,
     'isDuressActive': isDuressActive,
+    'isActive': isActive,
+    'cancelledAt': cancelledAt != null ? Timestamp.fromDate(cancelledAt!) : null,
   };
 
   String get alertLabel {

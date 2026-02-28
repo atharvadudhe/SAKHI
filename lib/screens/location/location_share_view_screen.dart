@@ -63,6 +63,16 @@ class _LocationShareViewScreenState extends State<LocationShareViewScreen> {
     await launchUrlString('tel:$normalized');
   }
 
+  Future<void> _openDirections(LatLng destination) async {
+    final origin = _myLocation;
+    final originQuery = origin == null
+        ? ''
+        : '&origin=${origin.latitude},${origin.longitude}';
+    final url =
+        'https://www.google.com/maps/dir/?api=1$originQuery&destination=${destination.latitude},${destination.longitude}&travelmode=walking';
+    await launchUrlString(url);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -141,22 +151,32 @@ class _LocationShareViewScreenState extends State<LocationShareViewScreen> {
               ),
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.fromLTRB(14, 10, 14, 18),
                 color: Colors.white,
-                child: Text(
-                  'Live location refreshes every 30 seconds.',
-                  style: TextStyle(color: Colors.grey.shade700),
+                child: Column(
+                  children: [
+                    Text(
+                      'Live location refreshes every 30 seconds.',
+                      style: TextStyle(color: Colors.grey.shade700),
+                    ),
+                    const SizedBox(height: 12),
+                    Center(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _openDirections(senderLatLng),
+                        icon: const Icon(Icons.directions_rounded),
+                        label: const Text('Get Directions'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: SakhiTheme.connected,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           );
         },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _callSender,
-        backgroundColor: SakhiTheme.danger,
-        icon: const Icon(Icons.call_rounded),
-        label: const Text('Call'),
       ),
     );
   }

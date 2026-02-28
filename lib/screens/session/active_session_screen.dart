@@ -575,6 +575,9 @@ class _ActiveSessionScreenState extends ConsumerState<ActiveSessionScreen> {
                       child: SOSButton(
                         size: 56,
                         onTriggered: () => _triggerSOS(session.sessionId),
+                        onCancelTriggered: () {},
+                        isActive: false,
+                        cooldownUntil: null,
                       ),
                     ),
                   ],

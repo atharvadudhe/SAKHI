@@ -26,6 +26,7 @@ class _VolunteerDashboardScreenState
   // ignore: unused_field
   GoogleMapController? _mapController;
   LatLng? _myPosition;
+  double _maxRangeKm = 5.0;
 
   @override
   void initState() {
@@ -92,6 +93,21 @@ class _VolunteerDashboardScreenState
     );
     if (km < 1) return '${(km * 1000).round()}m away';
     return '${km.toStringAsFixed(1)}km away';
+  }
+
+  List<SessionModel> _filterByRange(List<SessionModel> sessions) {
+    if (_myPosition == null) return sessions;
+    return sessions.where((s) {
+      final loc = s.userLocation;
+      if (loc == null) return false;
+      final km = LocationService.instance.distanceBetween(
+        _myPosition!.latitude,
+        _myPosition!.longitude,
+        loc.latitude,
+        loc.longitude,
+      );
+      return km <= _maxRangeKm;
+    }).toList();
   }
 
   /// Accept an incoming walking-buddy request (converted to [SessionModel]).
@@ -313,6 +329,7 @@ class _VolunteerDashboardScreenState
             final sessions = allSessions
                 .where((s) => !_dismissedIds.contains(s.sessionId))
                 .toList();
+            final filteredSessions = _filterByRange(sessions);
 
             return Column(
               children: [
@@ -331,12 +348,47 @@ class _VolunteerDashboardScreenState
                             target: _myPosition!,
                             zoom: 14,
                           ),
-                          markers: _buildMarkers(sessions),
+                          markers: _buildMarkers(filteredSessions),
                           myLocationEnabled: false,
                           zoomControlsEnabled: false,
                           mapToolbarEnabled: false,
                           onMapCreated: (c) => _mapController = c,
                         ),
+                ),
+
+                // Range selector
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: SakhiTheme.primary.withValues(alpha: 0.05),
+                    border: Border(
+                      bottom: BorderSide(
+                        color: SakhiTheme.primary.withValues(alpha: 0.12),
+                      ),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Range: ${_maxRangeKm.toStringAsFixed(1)} km',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      Slider(
+                        value: _maxRangeKm,
+                        min: 2,
+                        max: 50,
+                        divisions: 96,
+                        label: '${_maxRangeKm.toStringAsFixed(1)} km',
+                        onChanged: (v) => setState(() => _maxRangeKm = v),
+                      ),
+                    ],
+                  ),
                 ),
 
                 // Stats Bar
@@ -358,7 +410,7 @@ class _VolunteerDashboardScreenState
                           color: SakhiTheme.safe, size: 20),
                       const SizedBox(width: 10),
                       Text(
-                        '${sessions.length} nearby request${sessions.length == 1 ? '' : 's'}',
+                        '${filteredSessions.length} request${filteredSessions.length == 1 ? '' : 's'} within ${_maxRangeKm.toStringAsFixed(1)} km',
                         style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           color: SakhiTheme.safe,
@@ -371,7 +423,7 @@ class _VolunteerDashboardScreenState
 
                 // Request List
                 Expanded(
-                  child: sessions.isEmpty
+                  child: filteredSessions.isEmpty
                       ? Center(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -384,7 +436,7 @@ class _VolunteerDashboardScreenState
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                'No active requests',
+                                'No requests in range',
                                 style:
                                     theme.textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w600,
@@ -392,7 +444,7 @@ class _VolunteerDashboardScreenState
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Check back soon \u2014 someone may need your help.',
+                                'Try increasing your range above ${_maxRangeKm.toStringAsFixed(1)} km.',
                                 style: TextStyle(
                                   color: theme.colorScheme.onSurface
                                       .withValues(alpha: 0.5),
@@ -403,9 +455,9 @@ class _VolunteerDashboardScreenState
                         )
                       : ListView.builder(
                           padding: const EdgeInsets.all(16),
-                          itemCount: sessions.length,
+                          itemCount: filteredSessions.length,
                           itemBuilder: (context, index) {
-                            final session = sessions[index];
+                            final session = filteredSessions[index];
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 12),
                               child: _SessionRequestCard(

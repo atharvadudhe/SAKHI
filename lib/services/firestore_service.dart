@@ -24,6 +24,23 @@ class FirestoreService {
   FirebaseFirestore get db => _db;
   Uuid get uuid => _uuid;
 
+  Future<String> _resolveDisplayName({
+    required String uid,
+    String? preferredName,
+  }) async {
+    final trimmed = preferredName?.trim() ?? '';
+    final lower = trimmed.toLowerCase();
+    final invalid = trimmed.isEmpty || lower == 'unknown' || lower == 'user';
+    if (!invalid) return trimmed;
+
+    try {
+      final user = await getUser(uid);
+      final resolved = user?.name.trim() ?? '';
+      if (resolved.isNotEmpty) return resolved;
+    } catch (_) {}
+    return 'Sakhi User';
+  }
+
   // ───────── User Operations ─────────
 
   /// Stream the current user's profile
@@ -278,6 +295,50 @@ class FirestoreService {
 
   // ───────── Community Broadcast ─────────
 
+  static const Duration _sosCooldown = Duration(minutes: 1);
+
+  Future<BroadcastModel?> getActiveSosBroadcastForUser(String uid) async {
+    final snap = await _db
+        .collection(AppConstants.broadcastsCollection)
+        .where('uid', isEqualTo: uid)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    final all = snap.docs
+        .map((d) => BroadcastModel.fromJson(d.data()))
+        .where((b) => b.alertType == 'need_help' && b.isActive)
+        .toList();
+    if (all.isEmpty) return null;
+    all.sort((a, b) {
+      final aTs = a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bTs = b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bTs.compareTo(aTs);
+    });
+    return all.first;
+  }
+
+  Future<Duration?> getSosCooldownRemaining(String uid) async {
+    final snap = await _db
+        .collection(AppConstants.broadcastsCollection)
+        .where('uid', isEqualTo: uid)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    final all = snap.docs
+        .map((d) => BroadcastModel.fromJson(d.data()))
+        .where((b) => b.alertType == 'need_help')
+        .toList();
+    if (all.isEmpty) return null;
+    all.sort((a, b) {
+      final aTs = a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bTs = b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bTs.compareTo(aTs);
+    });
+    final latest = all.first;
+    if (latest.timestamp == null) return null;
+    final elapsed = DateTime.now().difference(latest.timestamp!);
+    if (elapsed >= _sosCooldown) return null;
+    return _sosCooldown - elapsed;
+  }
+
   /// Send a community broadcast alert
   Future<void> sendBroadcast({
     required String uid,
@@ -286,16 +347,75 @@ class FirestoreService {
     required GeoPoint location,
     String? userName,
   }) async {
+    final resolvedName = await _resolveDisplayName(
+      uid: uid,
+      preferredName: userName,
+    );
+    if (alertType == 'need_help') {
+      final active = await getActiveSosBroadcastForUser(uid);
+      if (active != null) {
+        throw Exception('sos_already_active');
+      }
+      final remaining = await getSosCooldownRemaining(uid);
+      if (remaining != null) {
+        throw Exception('sos_cooldown:${remaining.inSeconds}');
+      }
+    }
+
     final id = _uuid.v4();
     await _db.collection(AppConstants.broadcastsCollection).doc(id).set({
       'id': id,
       'uid': uid,
-      'userName': userName,
+      'userName': resolvedName,
       'message': message,
       'alertType': alertType,
       'location': location,
       'timestamp': FieldValue.serverTimestamp(),
       'radiusKm': AppConstants.broadcastRadiusKm,
+      'isActive': true,
+      'cancelledAt': null,
+    });
+  }
+
+  /// Cancel an active SOS broadcast by owner.
+  Future<void> cancelActiveSosBroadcast(String uid) async {
+    final snap = await _db
+        .collection(AppConstants.broadcastsCollection)
+        .where('uid', isEqualTo: uid)
+        .get();
+    if (snap.docs.isEmpty) return;
+
+    final batch = _db.batch();
+    for (final doc in snap.docs) {
+      final b = BroadcastModel.fromJson(doc.data());
+      if (b.alertType != 'need_help' || !b.isActive) continue;
+      batch.update(doc.reference, {
+        'isActive': false,
+        'cancelledAt': FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+
+  /// Stream active SOS for current user.
+  Stream<BroadcastModel?> activeSosForUserStream(String uid) {
+    return _db
+        .collection(AppConstants.broadcastsCollection)
+        .where('uid', isEqualTo: uid)
+        .snapshots()
+        .map((snap) {
+      if (snap.docs.isEmpty) return null;
+      final all = snap.docs
+          .map((d) => BroadcastModel.fromJson(d.data()))
+          .where((b) => b.alertType == 'need_help' && b.isActive)
+          .toList();
+      if (all.isEmpty) return null;
+      all.sort((a, b) {
+        final aTs = a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bTs = b.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bTs.compareTo(aTs);
+      });
+      return all.first;
     });
   }
 
@@ -377,11 +497,15 @@ class FirestoreService {
     required int durationMinutes,
   }) async {
     final id = _uuid.v4();
+    final resolvedName = await _resolveDisplayName(
+      uid: uid,
+      preferredName: userName,
+    );
     final expiresAt = DateTime.now().add(Duration(minutes: durationMinutes));
     await _db.collection(AppConstants.locationSharesCollection).doc(id).set({
       'id': id,
       'uid': uid,
-      'userName': userName,
+      'userName': resolvedName,
       'senderPhone': senderPhone,
       'recipientUids': recipientUids,
       'recipientPhones': recipientPhones,
@@ -395,7 +519,7 @@ class FirestoreService {
     await createLocationShareAlerts(
       shareId: id,
       senderUid: uid,
-      senderName: userName,
+      senderName: resolvedName,
       senderPhone: senderPhone,
       recipientUids: recipientUids,
       recipientPhones: recipientPhones,
@@ -410,11 +534,45 @@ class FirestoreService {
     return _db
         .collection(AppConstants.locationSharesCollection)
         .where('uid', isEqualTo: uid)
-        .where('isActive', isEqualTo: true)
-        .orderBy('createdAt', descending: true)
-        .limit(5)
         .snapshots()
-        .map((snap) => snap.docs.map((doc) => doc.data()).toList());
+        .map((snap) {
+      final active = snap.docs
+          .map((doc) => doc.data())
+          .where((data) => (data['isActive'] as bool?) ?? false)
+          .toList();
+      active.sort((a, b) {
+        final aTs = a['createdAt'];
+        final bTs = b['createdAt'];
+        DateTime aDate = DateTime.fromMillisecondsSinceEpoch(0);
+        DateTime bDate = DateTime.fromMillisecondsSinceEpoch(0);
+        if (aTs is Timestamp) aDate = aTs.toDate();
+        if (bTs is Timestamp) bDate = bTs.toDate();
+        return bDate.compareTo(aDate);
+      });
+      return active.take(5).toList();
+    });
+  }
+
+  /// Fetch active location shares for a user once.
+  Future<List<Map<String, dynamic>>> getActiveLocationShares(String uid) async {
+    final snap = await _db
+        .collection(AppConstants.locationSharesCollection)
+        .where('uid', isEqualTo: uid)
+        .get();
+    final active = snap.docs
+        .map((d) => d.data())
+        .where((data) => (data['isActive'] as bool?) ?? false)
+        .toList();
+    active.sort((a, b) {
+      final aTs = a['createdAt'];
+      final bTs = b['createdAt'];
+      DateTime aDate = DateTime.fromMillisecondsSinceEpoch(0);
+      DateTime bDate = DateTime.fromMillisecondsSinceEpoch(0);
+      if (aTs is Timestamp) aDate = aTs.toDate();
+      if (bTs is Timestamp) bDate = bTs.toDate();
+      return bDate.compareTo(aDate);
+    });
+    return active.take(10).toList();
   }
 
   /// Stop a location share
@@ -423,6 +581,33 @@ class FirestoreService {
       'isActive': false,
     });
     await endLocationShareAlerts(shareId);
+  }
+
+  /// Stop all active location shares for a user.
+  Future<void> stopAllActiveLocationShares(String uid) async {
+    final snap = await _db
+        .collection(AppConstants.locationSharesCollection)
+        .where('uid', isEqualTo: uid)
+        .get();
+    if (snap.docs.isEmpty) return;
+
+    final activeDocs = snap.docs.where((d) {
+      final data = d.data();
+      return (data['isActive'] as bool?) ?? false;
+    }).toList();
+    if (activeDocs.isEmpty) return;
+
+    final batch = _db.batch();
+    for (final doc in activeDocs) {
+      batch.update(doc.reference, {
+        'isActive': false,
+      });
+    }
+    await batch.commit();
+
+    for (final doc in activeDocs) {
+      await endLocationShareAlerts(doc.id);
+    }
   }
 
   /// Update location on an active share

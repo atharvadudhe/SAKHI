@@ -23,6 +23,7 @@ import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/location_service.dart';
 import '../services/evidence_service.dart';
+import '../services/internal_heartbeat_service.dart';
 import '../config/constants.dart';
 
 // ───────── Auth Providers ─────────
@@ -319,11 +320,40 @@ final incomingLocationShareAlertsProvider =
   return FirestoreService.instance.incomingLocationShareAlertsStream(user.uid);
 });
 
+/// Stream of the current user's active location shares.
+final activeLocationSharesProvider =
+    StreamProvider<List<Map<String, dynamic>>>((ref) {
+  final user = ref.watch(authStateProvider).value;
+  if (user == null) return Stream.value([]);
+  return FirestoreService.instance.activeLocationSharesStream(user.uid);
+});
+
 // ───────── Broadcasts Feed Provider ─────────
 
 /// Stream of community broadcast alerts
 final broadcastsFeedProvider = StreamProvider<List<BroadcastModel>>((ref) {
   return FirestoreService.instance.broadcastsStream();
+});
+
+/// Current user's active SOS broadcast (if any).
+final activeSosBroadcastProvider = StreamProvider<BroadcastModel?>((ref) {
+  final user = ref.watch(authStateProvider).value;
+  if (user == null) return Stream.value(null);
+  return FirestoreService.instance.activeSosForUserStream(user.uid);
+});
+
+final internalHeartbeatServiceProvider = Provider<InternalHeartbeatService>((
+  ref,
+) {
+  return InternalHeartbeatService.instance;
+});
+
+final internalHeartbeatStateProvider = StreamProvider<InternalHeartbeatState>((
+  ref,
+) {
+  final service = ref.watch(internalHeartbeatServiceProvider);
+  service.initialize();
+  return service.stream;
 });
 
 // ───────── Admin Providers ─────────

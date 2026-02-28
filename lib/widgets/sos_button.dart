@@ -4,9 +4,19 @@ import 'package:flutter/services.dart';
 
 class SOSButton extends StatefulWidget {
   final VoidCallback onTriggered;
+  final VoidCallback onCancelTriggered;
   final double size;
+  final bool isActive;
+  final DateTime? cooldownUntil;
 
-  const SOSButton({super.key, required this.onTriggered, this.size = 72});
+  const SOSButton({
+    super.key,
+    required this.onTriggered,
+    required this.onCancelTriggered,
+    this.size = 72,
+    this.isActive = false,
+    this.cooldownUntil,
+  });
 
   @override
   State<SOSButton> createState() => _SOSButtonState();
@@ -19,6 +29,8 @@ class _SOSButtonState extends State<SOSButton>
   bool _isLongPressing = false;
   double _holdProgress = 0;
   Timer? _holdTimer;
+  Timer? _cooldownTimer;
+  Duration _cooldownLeft = Duration.zero;
 
   @override
   void initState() {
@@ -31,13 +43,56 @@ class _SOSButtonState extends State<SOSButton>
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.12).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+    _initCooldownTicker();
+  }
+
+  @override
+  void didUpdateWidget(covariant SOSButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.cooldownUntil != widget.cooldownUntil) {
+      _initCooldownTicker();
+    }
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
     _holdTimer?.cancel();
+    _cooldownTimer?.cancel();
     super.dispose();
+  }
+
+  void _initCooldownTicker() {
+    _cooldownTimer?.cancel();
+    _syncCooldownLeft();
+    if (_cooldownLeft > Duration.zero) {
+      _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        _syncCooldownLeft();
+      });
+    }
+  }
+
+  void _syncCooldownLeft() {
+    final until = widget.cooldownUntil;
+    if (until == null) {
+      if (mounted) setState(() => _cooldownLeft = Duration.zero);
+      return;
+    }
+    final left = until.difference(DateTime.now());
+    if (mounted) {
+      setState(() {
+        _cooldownLeft = left.isNegative ? Duration.zero : left;
+      });
+    }
+  }
+
+  bool get _isCooldown => _cooldownLeft > Duration.zero && !widget.isActive;
+
+  String get _cooldownLabel {
+    final total = _cooldownLeft.inSeconds.clamp(0, 3599);
+    final mm = (total ~/ 60).toString().padLeft(2, '0');
+    final ss = (total % 60).toString().padLeft(2, '0');
+    return '$mm:$ss';
   }
 
   void _startHold() {
@@ -62,7 +117,11 @@ class _SOSButtonState extends State<SOSButton>
       if (ticks >= totalTicks) {
         timer.cancel();
         HapticFeedback.heavyImpact();
-        widget.onTriggered();
+        if (widget.isActive) {
+          widget.onCancelTriggered();
+        } else if (!_isCooldown) {
+          widget.onTriggered();
+        }
         setState(() {
           _isLongPressing = false;
           _holdProgress = 0;
@@ -81,14 +140,18 @@ class _SOSButtonState extends State<SOSButton>
 
   @override
   Widget build(BuildContext context) {
+    final isEnabled = !widget.isActive && !_isCooldown;
+    final canHold = isEnabled || widget.isActive;
     return ScaleTransition(
-      scale: _isLongPressing
+      scale: !isEnabled
+          ? const AlwaysStoppedAnimation(1.0)
+          : _isLongPressing
           ? AlwaysStoppedAnimation(1.0 + _holdProgress * 0.15)
           : _pulseAnimation,
       child: GestureDetector(
-        onLongPressStart: (_) => _startHold(),
-        onLongPressEnd: (_) => _cancelHold(),
-        onLongPressCancel: _cancelHold,
+        onLongPressStart: canHold ? (_) => _startHold() : null,
+        onLongPressEnd: canHold ? (_) => _cancelHold() : null,
+        onLongPressCancel: canHold ? _cancelHold : null,
         child: Stack(
           alignment: Alignment.center,
           children: [
@@ -98,7 +161,9 @@ class _SOSButtonState extends State<SOSButton>
               height: widget.size + 24,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.red.withValues(alpha: 0.15),
+                color: widget.isActive
+                    ? Colors.red.withValues(alpha: 0.14)
+                    : Colors.red.withValues(alpha: isEnabled ? 0.15 : 0.06),
               ),
             ),
             // Progress ring
@@ -122,11 +187,15 @@ class _SOSButtonState extends State<SOSButton>
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [Colors.red.shade600, Colors.red.shade900],
+                  colors: widget.isActive
+                      ? [Colors.red.shade500, Colors.red.shade800]
+                      : isEnabled
+                      ? [Colors.red.shade600, Colors.red.shade900]
+                      : [Colors.red.shade300, Colors.red.shade400],
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.red.withValues(alpha: 0.5),
+                    color: Colors.red.withValues(alpha: isEnabled ? 0.5 : 0.18),
                     blurRadius: _isLongPressing ? 24 : 12,
                     spreadRadius: _isLongPressing ? 4 : 0,
                   ),
@@ -135,19 +204,23 @@ class _SOSButtonState extends State<SOSButton>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(
-                    Icons.warning_rounded,
+                  Icon(
+                    widget.isActive ? Icons.close_rounded : Icons.warning_rounded,
                     color: Colors.white,
                     size: 24,
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'SOS',
+                    widget.isActive
+                        ? 'HOLD'
+                        : _isCooldown
+                        ? _cooldownLabel
+                        : 'SOS',
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: widget.size * 0.2,
+                      fontSize: _isCooldown ? widget.size * 0.17 : widget.size * 0.2,
                       fontWeight: FontWeight.w900,
-                      letterSpacing: 2,
+                      letterSpacing: _isCooldown ? 1 : 2,
                     ),
                   ),
                 ],
