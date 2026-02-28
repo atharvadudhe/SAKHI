@@ -32,6 +32,12 @@ final walkingSessionProvider =
   return FirestoreService.instance.getWalkingSession(sessionId);
 });
 
+/// Stream a specific walking session by ID (real-time updates)
+final walkingSessionStreamProvider =
+    StreamProvider.family<WalkingSessionModel?, String>((ref, sessionId) {
+  return FirestoreService.instance.getWalkingSessionStream(sessionId);
+});
+
 /// User's walking session history
 final walkingSessionHistoryProvider =
     FutureProvider.family<List<WalkingSessionModel>, String>((ref, userId) {
